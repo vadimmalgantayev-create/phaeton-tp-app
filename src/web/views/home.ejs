@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Главная — Phaeton ТП</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="screen">
+    <div class="header">
+      <p class="eyebrow"><%= new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(month) %></p>
+      <h1>Здравствуйте<%= managerName ? ', ' + managerName.split(' ')[1] || managerName : '' %></h1>
+    </div>
+
+    <div class="card">
+      <h2>Товарооборот за месяц</h2>
+      <div class="turnover-row">
+        <div class="progress-ring" style="--pct: <%= turnover.percent !== null ? Math.min(turnover.percent, 100) : 0 %>">
+          <div class="inner"><%= turnover.percent !== null ? turnover.percent + '%' : '—' %></div>
+        </div>
+        <div class="turnover-details">
+          <p class="amount"><%= Math.round(turnover.actual).toLocaleString('ru-RU') %> <%= turnover.unit %></p>
+          <p class="plan">
+            <% if (turnover.plan !== null) { %>
+              план: <%= Math.round(turnover.plan).toLocaleString('ru-RU') %> <%= turnover.unit %>
+            <% } else { %>
+              план не найден в базе <span class="badge-stub">нет данных</span>
+            <% } %>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Оплачиваемые задачи</h2>
+      <% if (paidTasks.length === 0) { %>
+        <p class="empty-state">Нет оплачиваемых задач с весом в текущем плане <span class="badge-stub">нет данных</span></p>
+      <% } else { %>
+        <% paidTasks.forEach(function(t) { %>
+          <div class="task-row">
+            <div class="task-name">
+              <%= t.name %>
+              <span class="task-target">цель: <%= Math.round(t.planValue).toLocaleString('ru-RU') %> <%= t.unit %></span>
+            </div>
+            <div class="weight-badge"><%= t.weightPct %>%</div>
+          </div>
+        <% }) %>
+      <% } %>
+    </div>
+
+    <div class="card">
+      <h2>Требует внимания — просрочка</h2>
+      <% if (attention.length === 0) { %>
+        <p class="empty-state">Просроченной задолженности не найдено</p>
+      <% } else { %>
+        <% attention.forEach(function(a) { %>
+          <div class="attention-row">
+            <div class="attention-client"><%= a.clientName %></div>
+            <div class="attention-debt">
+              <%= Math.round(a.totalDebt).toLocaleString('ru-RU') %>
+              <% if (a.nearestPaymentDate) { %>
+                <span class="attention-date"><%= new Intl.DateTimeFormat('ru-RU').format(a.nearestPaymentDate) %></span>
+              <% } %>
+            </div>
+          </div>
+        <% }) %>
+      <% } %>
+    </div>
+  </div>
+</body>
+</html>

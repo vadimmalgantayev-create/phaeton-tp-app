@@ -9,10 +9,13 @@
     "prisma:migrate": "prisma migrate dev --name init",
     "load": "node src/cli.js load",
     "demo": "node src/cli.js demo",
+    "start": "node src/server.js",
     "test": "echo 'No automated test suite yet -- verified via `npm run load` against samples/, see README.md' && exit 0"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "ejs": "^6.0.1",
+    "express": "^5.2.1",
     "jszip": "^3.10.1",
     "xlsx": "^0.18.5"
   },
