@@ -1,0 +1,226 @@
+// Prisma schema for the Phaeton TP ETL loader.
+//
+// Scope note: this schema was authored from scratch for this task because no
+// project resource / git remote was available to reach the actual PHA-68
+// (MVP app) codebase or its Prisma schema — see README.md "Известные
+// ограничения" for details. It models only the entities the ETL loader
+// itself needs to read/write (ТЗ section 5, minus Order/GPS/Photo-audit/Note
+// which belong to the app, not the loader). If/when the PHA-68 repo becomes
+// reachable, these models should be reconciled with (not duplicated next to)
+// its existing ones.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Region {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  managers  Manager[]
+  discounts Discount[]
+
+  @@map("regions")
+}
+
+model Manager {
+  id        Int         @id @default(autoincrement())
+  name      String
+  region    Region      @relation(fields: [regionId], references: [id])
+  regionId  Int
+  clients   Client[]
+  plans     Plan[]
+  acbPlans  AcbPlan[]
+  salesFacts SalesFact[]
+  missingInvoices MissingInvoice[]
+
+  @@unique([name, regionId])
+  @@map("managers")
+}
+
+model Client {
+  id              Int              @id @default(autoincrement())
+  code            String?          @unique // "Код клиента" from addresses file; not every source file carries it
+  name            String
+  manager         Manager?         @relation(fields: [managerId], references: [id])
+  managerId       Int?
+  route           String?
+  addresses       ClientAddress[]
+  discounts       Discount[]
+  debt            Debt?
+  salesFacts      SalesFact[]
+  missingInvoices MissingInvoice[]
+
+  // Intentionally no unique(name, managerId): the addresses file (the only
+  // source with a real client code) has real cases of two different codes
+  // sharing one display name under the same manager, so name is not a safe
+  // uniqueness key — only `code` is. Other source files that lack a code
+  // (discounts/debt/sales/missing-invoices) resolve clients by name via an
+  // in-memory cache in load.js, which can't tell such same-named clients
+  // apart either — a documented limitation, not enforced at the DB level.
+  @@map("clients")
+}
+
+model ClientAddress {
+  id              Int     @id @default(autoincrement())
+  client          Client  @relation(fields: [clientId], references: [id])
+  clientId        Int
+  city            String
+  deliveryAddress String
+  isPrimary       Boolean @default(false)
+  deliveryType    String?
+  phone           String?
+  latitude        Float?
+  longitude       Float?
+
+  @@map("client_addresses")
+}
+
+model Product {
+  id                   Int      @id @default(autoincrement())
+  article              String
+  article1c            String?
+  brand                String
+  name                 String
+  tnved                String?
+  packQty              Int?
+  priceGross           Float? // "Цена без скидки"
+  generalDiscountPct   Float? // "Общая скидка"
+  priceNet             Float? // "Цена" (после общей скидки прайса)
+  application          String?
+  isServiceRow         Boolean  @default(false) // no price -> служебная строка, скрыть из каталога
+  stocks               Stock[]
+
+  @@unique([article, brand])
+  @@map("products")
+}
+
+model Stock {
+  id         Int     @id @default(autoincrement())
+  product    Product @relation(fields: [productId], references: [id])
+  productId  Int
+  warehouse  String // "Алматы СКЛАД" | "Астана СКЛАД" | "Кар Сити СКЛАД"
+  quantity   Float
+
+  @@unique([productId, warehouse])
+  @@map("stocks")
+}
+
+model Discount {
+  id         Int       @id @default(autoincrement())
+  region     Region?   @relation(fields: [regionId], references: [id])
+  regionId   Int?
+  client     Client?   @relation(fields: [clientId], references: [id])
+  clientId   Int?
+  brand      String
+  percent    Float
+  validUntil DateTime?
+
+  @@map("discounts")
+}
+
+model Debt {
+  id                 Int       @id @default(autoincrement())
+  client             Client    @relation(fields: [clientId], references: [id])
+  clientId           Int       @unique
+  totalDebt          Float
+  limitAmount        Float?
+  nearestPaymentDate DateTime?
+  bucketUnder3d      Float     @default(0)
+  bucket3to7d        Float     @default(0)
+  bucket7to14d       Float     @default(0)
+  bucket14to30d      Float     @default(0)
+  bucket30to60d      Float     @default(0)
+  bucket60to90d      Float     @default(0)
+  bucket90to180d     Float     @default(0)
+  bucket180dTo1y     Float     @default(0)
+  bucket1to2y        Float     @default(0)
+  bucket2to3y        Float     @default(0)
+  bucketOver3y       Float     @default(0)
+  isOverdue          Boolean   @default(false)
+
+  @@map("debts")
+}
+
+model SalesFact {
+  id          Int      @id @default(autoincrement())
+  manager     Manager  @relation(fields: [managerId], references: [id])
+  managerId   Int
+  client      Client   @relation(fields: [clientId], references: [id])
+  clientId    Int
+  brand       String
+  month       DateTime // first day of month, e.g. 2026-01-01
+  quantity    Float    @default(0)
+  volumeL     Float    @default(0)
+  revenueEur  Float    @default(0)
+
+  @@unique([managerId, clientId, brand, month])
+  @@map("sales_facts")
+}
+
+model Plan {
+  id           Int     @id @default(autoincrement())
+  manager      Manager @relation(fields: [managerId], references: [id])
+  managerId    Int
+  taskType     String // "BRAND_GROUP" | "TOTAL"
+  productGroup String? // "Группа товара" (напр. "555", "WINKOD + AKIKA"); null для общего плана
+  planValue    Float
+  unit         String // "EUR" | "LITERS" | "PIECES"
+  weightPct    Float
+
+  @@map("plans")
+}
+
+model AcbPlan {
+  id          Int     @id @default(autoincrement())
+  manager     Manager @relation(fields: [managerId], references: [id])
+  managerId   Int     @unique
+  acbTotal    Int
+  acbOil      Int
+  weightPct   Float
+
+  @@map("acb_plans")
+}
+
+model MissingInvoice {
+  id              Int      @id @default(autoincrement())
+  client          Client   @relation(fields: [clientId], references: [id])
+  clientId        Int
+  manager         Manager? @relation(fields: [managerId], references: [id])
+  managerId       Int?
+  orderRef        String
+  deliveryVariant String?
+
+  @@map("missing_invoices")
+}
+
+model DataLoad {
+  id          Int               @id @default(autoincrement())
+  sourceFile  String
+  sourceType  String // e.g. "price_list", "discounts", "debt", ...
+  loadedAt    DateTime          @default(now())
+  rowsTotal   Int
+  rowsOk      Int
+  rowsError   Int
+  status      String // "success" | "partial" | "failed"
+  errors      ValidationError[]
+
+  @@map("data_loads")
+}
+
+model ValidationError {
+  id         Int      @id @default(autoincrement())
+  dataLoad   DataLoad @relation(fields: [dataLoadId], references: [id])
+  dataLoadId Int
+  sheet      String?
+  rowNumber  Int?
+  field      String?
+  message    String
+  rawValue   String?
+
+  @@map("validation_errors")
+}

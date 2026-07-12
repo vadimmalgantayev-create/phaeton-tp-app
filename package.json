@@ -1,0 +1,27 @@
+{
+  "name": "phaeton-etl-loader",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Node.js ETL loader for Phaeton TP app: parses daily 1C Excel exports (price list, discounts, debt, addresses, sales, plan, missing invoices) into the SQLite/Prisma database, and exports formed orders into the 1C upload template.",
+  "type": "commonjs",
+  "scripts": {
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev --name init",
+    "load": "node src/cli.js load",
+    "demo": "node src/cli.js demo",
+    "test": "echo 'No automated test suite yet -- verified via `npm run load` against samples/, see README.md' && exit 0"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "jszip": "^3.10.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0"
+  },
+  "allowScripts": {
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "prisma@5.22.0": true
+  }
+}
