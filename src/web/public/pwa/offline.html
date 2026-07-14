@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Офлайн — Phaeton ТП</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+</head>
+<body>
+  <div class="screen">
+    <div class="nav">
+      <a href="/">Главная</a>
+      <a href="/pwa/offline.html" class="active">Офлайн</a>
+    </div>
+    <div class="header">
+      <h1>Офлайн-режим</h1>
+    </div>
+
+    <div class="card">
+      <p class="empty-state" id="sync-status">Загрузка...</p>
+      <button class="form-button" id="sync-btn" type="button">Обновить офлайн-данные (нужна сеть)</button>
+    </div>
+
+    <div class="card">
+      <h2>Клиент</h2>
+      <select class="form-input" id="client-select"></select>
+    </div>
+
+    <div class="card">
+      <h2>Каталог (офлайн)</h2>
+      <input class="form-input" id="search-input" type="text" placeholder="Поиск: название, артикул">
+      <div id="results"></div>
+    </div>
+
+    <div class="card">
+      <h2>Черновик заказа (не синхронизирован)</h2>
+      <div id="queued-orders"></div>
+    </div>
+
+    <div class="card">
+      <h2>Неотправленные гео-отметки</h2>
+      <div id="queued-checkins"></div>
+    </div>
+
+    <div class="card">
+      <button class="form-button" id="flush-btn" type="button">Синхронизировать с сервером</button>
+      <p class="empty-state" id="flush-status"></p>
+    </div>
+  </div>
+
+  <script src="/vendor/dexie.min.js"></script>
+  <script src="/offline.js"></script>
+  <script>
+    var offline = window.phaetonOffline;
+    var clientSelect = document.getElementById('client-select');
+    var searchInput = document.getElementById('search-input');
+    var resultsEl = document.getElementById('results');
+    var queuedOrdersEl = document.getElementById('queued-orders');
+    var queuedCheckinsEl = document.getElementById('queued-checkins');
+    var syncStatusEl = document.getElementById('sync-status');
+    var flushStatusEl = document.getElementById('flush-status');
+
+    function fmtDate(iso) {
+      if (!iso) return 'никогда';
+      return new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(iso));
+    }
+
+    async function refreshStatus() {
+      var lastSync = await offline.getLastSync();
+      syncStatusEl.textContent = 'Последняя синхронизация: ' + fmtDate(lastSync) + (navigator.onLine ? ' (сеть есть)' : ' (офлайн)');
+    }
+
+    async function loadClients() {
+      var clients = await offline.getClients();
+      clientSelect.innerHTML = clients.map(function (c) {
+        return '<option value="' + c.id + '">' + c.name + '</option>';
+      }).join('');
+    }
+
+    async function renderResults() {
+      var items = await offline.searchProducts(searchInput.value, null, clientSelect.value);
+      resultsEl.innerHTML = items.map(function (p) {
+        var priceLine = p.clientPrice !== null
+          ? 'Цена клиента: ' + p.clientPrice + ' (скидка ' + p.discountPercent + '%)'
+          : 'Цена без скидки: ' + (p.priceGross || '—');
+        return '<div class="task-row">' +
+          '<div class="task-name"><b>' + p.name + '</b><span class="task-target">' + p.brand + ' · ' + p.article + '</span>' +
+          '<span class="task-target">' + priceLine + '</span></div>' +
+          '<button class="weight-badge add-btn" data-id="' + p.id + '" data-name="' + p.name.replace(/"/g, '&quot;') + '">В заказ</button>' +
+          '</div>';
+      }).join('') || '<p class="empty-state">Ничего не найдено. Синхронизируйте данные, если каталог пуст.</p>';
+
+      resultsEl.querySelectorAll('.add-btn').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          await offline.queueOrderLine(clientSelect.value, btn.dataset.id, 1, btn.dataset.name);
+          await renderQueuedOrders();
+        });
+      });
+    }
+
+    async function renderQueuedOrders() {
+      var lines = await offline.getQueuedOrders();
+      queuedOrdersEl.innerHTML = lines.length === 0
+        ? '<p class="empty-state">Пусто</p>'
+        : lines.map(function (l) {
+            return '<div class="task-row"><div class="task-name">' + (l.productLabel || ('товар #' + l.productId)) +
+              '</div><div class="weight-badge">× ' + l.quantity + '</div></div>';
+          }).join('');
+    }
+
+    async function renderQueuedCheckins() {
+      var rows = await offline.getQueuedCheckins();
+      queuedCheckinsEl.innerHTML = rows.length === 0
+        ? '<p class="empty-state">Пусто</p>'
+        : rows.map(function (r) {
+            return '<div class="task-row"><div class="task-name">Клиент #' + r.clientId + '</div></div>';
+          }).join('');
+    }
+
+    document.getElementById('sync-btn').addEventListener('click', async function () {
+      try {
+        await offline.cacheSyncData();
+        await refreshStatus();
+        await loadClients();
+        await renderResults();
+      } catch (e) {
+        syncStatusEl.textContent = 'Не удалось синхронизировать (нужна сеть): ' + e.message;
+      }
+    });
+
+    document.getElementById('flush-btn').addEventListener('click', async function () {
+      var result = await offline.flushQueues();
+      flushStatusEl.textContent = 'Отправлено: гео-отметок ' + result.checkinsSynced + ', позиций заказа ' + result.orderLinesSynced;
+      await renderQueuedOrders();
+      await renderQueuedCheckins();
+    });
+
+    searchInput.addEventListener('input', renderResults);
+    clientSelect.addEventListener('change', renderResults);
+
+    (async function init() {
+      await refreshStatus();
+      await loadClients();
+      await renderResults();
+      await renderQueuedOrders();
+      await renderQueuedCheckins();
+    })();
+  </script>
+</body>
+</html>

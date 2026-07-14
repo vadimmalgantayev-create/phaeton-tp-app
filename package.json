@@ -24,6 +24,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "dexie": "^4.4.4",
     "prisma": "^5.22.0"
   },
   "allowScripts": {

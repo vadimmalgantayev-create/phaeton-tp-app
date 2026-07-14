@@ -16,7 +16,7 @@ async function getOrCreateDraftOrder(clientId, createdById) {
 
 // ТЗ 6.5: автоматический расчёт скидки на момент добавления в заказ
 // (переиспользует pricing.js, как и каталог).
-async function addLine(orderId, productId) {
+async function addLine(orderId, productId, quantityToAdd = 1) {
   const [product, order] = await Promise.all([
     prisma.product.findUnique({ where: { id: productId } }),
     prisma.order.findUnique({ where: { id: orderId } }),
@@ -25,7 +25,7 @@ async function addLine(orderId, productId) {
 
   const existing = await prisma.orderLine.findFirst({ where: { orderId, productId } });
   if (existing) {
-    return prisma.orderLine.update({ where: { id: existing.id }, data: { quantity: existing.quantity + 1 } });
+    return prisma.orderLine.update({ where: { id: existing.id }, data: { quantity: existing.quantity + quantityToAdd } });
   }
 
   const ctx = await getClientDiscountContext(order.clientId);
@@ -36,7 +36,7 @@ async function addLine(orderId, productId) {
   const supplierPrice = product.priceGross ?? 0;
 
   return prisma.orderLine.create({
-    data: { orderId, productId, quantity: 1, discountPercent, clientPrice, supplierPrice },
+    data: { orderId, productId, quantity: quantityToAdd, discountPercent, clientPrice, supplierPrice },
   });
 }
 

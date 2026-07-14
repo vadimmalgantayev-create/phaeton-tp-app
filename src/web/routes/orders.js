@@ -44,7 +44,8 @@ router.get('/orders/new', async (req, res, next) => {
 
     const order = await getOrCreateDraftOrder(clientId, req.user.sub);
     if (req.query.productId) {
-      await addLine(order.id, Number(req.query.productId));
+      const quantity = Math.max(1, Number(req.query.quantity) || 1);
+      await addLine(order.id, Number(req.query.productId), quantity);
     }
     res.redirect(`/orders/${order.id}`);
   } catch (err) {

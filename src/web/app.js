@@ -13,6 +13,7 @@ const ordersRouter = require('./routes/orders');
 const notificationsRouter = require('./routes/notifications');
 const routeRouter = require('./routes/route');
 const managerRouter = require('./routes/manager');
+const apiRouter = require('./routes/api');
 
 function createApp() {
   const app = express();
@@ -34,6 +35,7 @@ function createApp() {
   app.use('/', requireAuth, notificationsRouter);
   app.use('/', requireAuth, routeRouter);
   app.use('/', requireAuth, managerRouter);
+  app.use('/', requireAuth, apiRouter);
 
   app.use((err, req, res, next) => {
     console.error(err);

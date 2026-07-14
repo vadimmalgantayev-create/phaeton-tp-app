@@ -13,8 +13,13 @@
     <a href="/manager">Руководитель</a>
     <a href="/admin/users">Пользователи</a>
   <% } %>
+  <% if (user.role === 'TP') { %>
+    <a href="/pwa/offline.html">Офлайн</a>
+  <% } %>
   <a href="/account/password">Пароль</a>
   <form method="post" action="/logout" style="display:inline">
     <button class="weight-badge" type="submit" style="background:none;border:none;color:#9a9fab;cursor:pointer">Выйти</button>
   </form>
 </div>
+<script src="/vendor/dexie.min.js"></script>
+<script src="/offline.js"></script>
