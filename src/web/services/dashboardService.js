@@ -1,6 +1,8 @@
 'use strict';
 
 const { PrismaClient } = require('@prisma/client');
+const { getBrandTaskConfig, ACB_TASK_CONFIGS } = require('./taskBrandMapping');
+const { computeTaskActual } = require('./taskFacts');
 
 const prisma = new PrismaClient();
 
@@ -47,31 +49,41 @@ async function getDashboardData(managerId) {
   turnover.percent = turnover.plan ? Math.round((turnover.actual / turnover.plan) * 100) : null;
 
   // "Оплачиваемые задачи" = строки плана с ненулевым весом в бонусе
-  // (weightPct) — задачи с весом 0 в KPI не участвуют. Показываем цель и
-  // вес каждой задачи (реальные данные из Plan/AcbPlan). Процент
-  // фактического выполнения по бренд-группам здесь не считаем: это
-  // требует бизнес-правил сопоставления productGroup ("Мультибренд",
-  // "Масло" и т.п.) с конкретными брендами в продажах, которых в ТЗ нет —
-  // открытый продуктовый вопрос, а не то, что можно додумать в коде.
-  const paidTasks = weightedTasks.map((t) => ({
-    name: t.productGroup,
-    weightPct: t.weightPct,
-    planValue: t.planValue,
-    unit: t.unit,
-  }));
+  // (weightPct) — задачи с весом 0 в KPI не участвуют. Факт считается по
+  // предварительному сопоставлению бренд→задача (см. taskBrandMapping.js,
+  // PHA-79) — помечено mappingPreliminary, требует подтверждения владельца.
+  const paidTasks = await Promise.all(
+    weightedTasks.map(async (t) => {
+      const config = getBrandTaskConfig(t.productGroup);
+      const actual = config ? await computeTaskActual(managerId, month, config) : null;
+      const percent = actual !== null && t.planValue ? Math.round((actual / t.planValue) * 100) : null;
+      return {
+        name: t.productGroup,
+        weightPct: t.weightPct,
+        planValue: t.planValue,
+        unit: t.unit,
+        actual,
+        percent,
+        taskKey: config ? config.taskKey : null,
+        mappingPreliminary: config ? config.preliminary : false,
+      };
+    })
+  );
   if (acbPlan) {
-    paidTasks.push({
-      name: 'АКБ общий (активная клиентская база)',
-      weightPct: acbPlan.weightPct,
-      planValue: acbPlan.acbTotal,
-      unit: 'клиентов',
-    });
-    paidTasks.push({
-      name: 'АКБ масло',
-      weightPct: acbPlan.weightPct,
-      planValue: acbPlan.acbOil,
-      unit: 'клиентов',
-    });
+    for (const config of ACB_TASK_CONFIGS) {
+      const planValue = config.taskKey === 'acb_total' ? acbPlan.acbTotal : acbPlan.acbOil;
+      const actual = await computeTaskActual(managerId, month, config);
+      paidTasks.push({
+        name: config.name,
+        weightPct: acbPlan.weightPct,
+        planValue,
+        unit: 'клиентов',
+        actual,
+        percent: planValue ? Math.round((actual / planValue) * 100) : null,
+        taskKey: config.taskKey,
+        mappingPreliminary: config.preliminary,
+      });
+    }
   }
 
   const attention = overdueDebts.map((d) => ({

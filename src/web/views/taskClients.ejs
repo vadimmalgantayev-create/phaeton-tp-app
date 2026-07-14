@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title><%= config.name %> — Phaeton ТП</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+</head>
+<body>
+  <div class="screen">
+    <%- include('partials/nav', { user }) %>
+    <div class="header">
+      <p class="eyebrow"><%= new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(month) %></p>
+      <h1><%= config.name %></h1>
+    </div>
+
+    <% if (config.preliminary) { %>
+      <div class="card">
+        <p class="empty-state">Сопоставление бренд→задача предварительное <span class="badge-stub">черновик, требует подтверждения</span></p>
+      </div>
+    <% } %>
+
+    <div class="card">
+      <h2>Клиенты, закупившие в этом месяце</h2>
+      <% if (items.length === 0) { %>
+        <p class="empty-state">Закупок по этой задаче в текущем месяце не найдено</p>
+      <% } else { %>
+        <% items.forEach(function(it) { %>
+          <a href="/clients/<%= it.clientId %>" style="text-decoration:none;color:inherit">
+            <div class="attention-row">
+              <div class="attention-client"><%= it.clientName %></div>
+              <div class="attention-debt" style="color:#4fd18b">
+                <%= Math.round(it.amount).toLocaleString('ru-RU') %> <%= unit === 'LITERS' ? 'л' : 'EUR' %>
+              </div>
+            </div>
+          </a>
+        <% }) %>
+      <% } %>
+    </div>
+
+    <div class="card">
+      <a href="/">← на главную</a>
+    </div>
+  </div>
+</body>
+</html>

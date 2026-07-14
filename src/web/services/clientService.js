@@ -1,6 +1,7 @@
 'use strict';
 
 const { PrismaClient } = require('@prisma/client');
+const { getClientPlanFacts } = require('./clientPlanService');
 
 const prisma = new PrismaClient();
 const PAGE_SIZE = 30;
@@ -12,7 +13,7 @@ async function listClients({ managerIds, q, page = 1 } = {}) {
     where.OR = [{ name: { contains: q } }, { code: { contains: q } }];
   }
 
-  const [total, clients] = await Promise.all([
+  const [total, clients, planFacts] = await Promise.all([
     prisma.client.count({ where }),
     prisma.client.findMany({
       where,
@@ -21,17 +22,26 @@ async function listClients({ managerIds, q, page = 1 } = {}) {
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
+    getClientPlanFacts(managerIds),
   ]);
 
   return {
-    items: clients.map((c) => ({
-      id: c.id,
-      code: c.code,
-      name: c.name,
-      managerName: c.manager ? c.manager.name : null,
-      isOverdue: c.debt ? c.debt.isOverdue : false,
-      hasMissingInvoice: c._count.missingInvoices > 0,
-    })),
+    items: clients.map((c) => {
+      const planEur = planFacts.planByClient.has(c.id) ? planFacts.planByClient.get(c.id) : null;
+      const factEur = planFacts.factByClient.get(c.id) || 0;
+      return {
+        id: c.id,
+        code: c.code,
+        name: c.name,
+        managerName: c.manager ? c.manager.name : null,
+        isOverdue: c.debt ? c.debt.isOverdue : false,
+        hasMissingInvoice: c._count.missingInvoices > 0,
+        planEur,
+        factEur,
+        percent: planEur ? Math.round((factEur / planEur) * 100) : null,
+      };
+    }),
+    month: planFacts.month,
     page,
     pageSize: PAGE_SIZE,
     total,
@@ -40,10 +50,10 @@ async function listClients({ managerIds, q, page = 1 } = {}) {
 }
 
 // ТЗ 6.4: реквизиты, скидки, статус ДЗ, сигнал "нет накладных", история
-// продаж, заметки. Клиент-специфичного плана в данных нет (Plan/AcbPlan
-// хранятся только на уровне менеджера) -- показываем факт (историю продаж),
-// а не план/факт по клиенту: додумывать несуществующий клиентский план
-// было бы додумыванием бизнес-данных, которых нет ни в ТЗ, ни в источниках.
+// продаж, заметки. Индивидуальный план/факт клиента (PHA-79 п.3, расчётный
+// -- см. clientPlanService.js) показывается в списке /clients, а не здесь:
+// карточка клиента остаётся историей продаж, чтобы не дублировать один и
+// тот же расчёт на двух экранах.
 //
 // Скидки на карточке -- только индивидуальные скидки ЭТОГО клиента
 // (client.discounts, clientId != null в "Действующие скидки"). Региональная

@@ -19,6 +19,9 @@
         <input class="form-input" type="text" name="q" placeholder="Поиск: имя, код" value="<%= q || '' %>">
         <button class="form-button" type="submit">Найти</button>
       </form>
+      <p class="empty-state" style="margin-top:10px">
+        План клиента = доля клиента в продажах менеджера (EUR) за последние 4 месяца × общий план менеджера на текущий месяц.
+      </p>
     </div>
 
     <div class="card">
@@ -34,6 +37,15 @@
               <% if (c.isOverdue) { %><span class="badge-stub">просрочка</span><% } %>
               <% if (c.hasMissingInvoice) { %><span class="badge-stub">нет накладных</span><% } %>
             </div>
+          </div>
+          <div class="task-target" style="padding:0 0 10px">
+            факт: <%= Math.round(c.factEur).toLocaleString('ru-RU') %> EUR
+            <% if (c.planEur !== null) { %>
+              · план: <%= Math.round(c.planEur).toLocaleString('ru-RU') %> EUR
+              <% if (c.percent !== null) { %> (<%= c.percent %>%)<% } %>
+            <% } else { %>
+              · план не рассчитан <span class="badge-stub">нет истории продаж</span>
+            <% } %>
           </div>
         </a>
       <% }) %>

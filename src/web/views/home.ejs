@@ -43,13 +43,24 @@
         <p class="empty-state">Нет оплачиваемых задач с весом в текущем плане <span class="badge-stub">нет данных</span></p>
       <% } else { %>
         <% paidTasks.forEach(function(t) { %>
+          <% if (t.taskKey) { %><a href="/tasks/<%= t.taskKey %>" style="text-decoration:none;color:inherit"><% } %>
           <div class="task-row">
             <div class="task-name">
               <%= t.name %>
-              <span class="task-target">цель: <%= Math.round(t.planValue).toLocaleString('ru-RU') %> <%= t.unit %></span>
+              <% if (t.mappingPreliminary) { %><span class="badge-stub">черновик</span><% } %>
+              <span class="task-target">
+                план: <%= Math.round(t.planValue).toLocaleString('ru-RU') %> <%= t.unit %>
+                <% if (t.actual !== null) { %>
+                  · факт: <%= Math.round(t.actual).toLocaleString('ru-RU') %> <%= t.unit %>
+                  <% if (t.percent !== null) { %> (<%= t.percent %>%)<% } %>
+                <% } else { %>
+                  · факт не рассчитан <span class="badge-stub">нет сопоставления</span>
+                <% } %>
+              </span>
             </div>
-            <div class="weight-badge"><%= t.weightPct %>%</div>
+            <div class="weight-badge" title="Вес в премии">вес <%= t.weightPct %>%</div>
           </div>
+          <% if (t.taskKey) { %></a><% } %>
         <% }) %>
       <% } %>
     </div>
