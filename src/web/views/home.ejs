@@ -9,6 +9,9 @@
 </head>
 <body>
   <div class="screen">
+    <div class="brand-logo">
+      <img src="/logo.jpg" alt="PHAETON">
+    </div>
     <%- include('partials/nav', { user }) %>
     <div class="header">
       <p class="eyebrow"><%= new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(month) %></p>

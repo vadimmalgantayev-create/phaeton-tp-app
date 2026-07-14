@@ -9,6 +9,9 @@
 </head>
 <body>
   <div class="screen">
+    <div class="brand-logo">
+      <img src="/logo.jpg" alt="PHAETON">
+    </div>
     <div class="header">
       <h1>Вход в Phaeton ТП</h1>
     </div>
@@ -17,8 +20,13 @@
         <p class="attention-debt"><%= error %></p>
       <% } %>
       <form method="post" action="/login" class="form">
-        <label class="form-label">Логин</label>
-        <input class="form-input" type="text" name="username" autocomplete="username" required>
+        <label class="form-label">Менеджер</label>
+        <select class="form-input" name="managerId" required>
+          <option value="" disabled selected>Выберите менеджера</option>
+          <% managers.forEach(function(m) { %>
+            <option value="<%= m.id %>"><%= m.name %></option>
+          <% }) %>
+        </select>
         <label class="form-label">Пароль</label>
         <input class="form-input" type="password" name="password" autocomplete="current-password" required>
         <button class="form-button" type="submit">Войти</button>

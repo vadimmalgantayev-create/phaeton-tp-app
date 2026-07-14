@@ -9,23 +9,34 @@ const { requireAuth } = require('../auth/middleware');
 const prisma = new PrismaClient();
 const router = express.Router();
 
-router.get('/login', (req, res) => {
-  if (req.user) return res.redirect('/');
-  res.render('login', { error: null });
+// Общий пароль для входа по выбору менеджера (ТП). Проверяется против
+// DEMO_PASSWORD, а не против таблицы users -- на Render база эфемерная
+// (пересоздаётся при каждом деплое) и users там пустая, seed:users в
+// buildCommand не запускается. Дефолт 123456 только если переменная не
+// задана вовсе.
+const DEMO_PASSWORD = process.env.DEMO_PASSWORD || '123456';
+
+router.get('/login', async (req, res, next) => {
+  try {
+    if (req.user) return res.redirect('/');
+    const managers = await prisma.manager.findMany({ orderBy: { name: 'asc' } });
+    res.render('login', { error: null, managers });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.post('/login', async (req, res, next) => {
   try {
-    const { username, password } = req.body;
-    const user = await prisma.user.findUnique({ where: { username: String(username || '').trim() } });
-    if (!user || !user.isActive) {
-      return res.status(401).render('login', { error: 'Неверный логин или пароль' });
+    const { managerId, password } = req.body;
+    const managers = await prisma.manager.findMany({ orderBy: { name: 'asc' } });
+    const manager = managerId ? await prisma.manager.findUnique({ where: { id: Number(managerId) } }) : null;
+    if (!manager || String(password || '') !== DEMO_PASSWORD) {
+      return res.status(401).render('login', { error: 'Неверный менеджер или пароль', managers });
     }
-    const ok = await bcrypt.compare(String(password || ''), user.passwordHash);
-    if (!ok) {
-      return res.status(401).render('login', { error: 'Неверный логин или пароль' });
-    }
-    const token = signSession(user);
+    // Вход всегда как TP (ТЗ: роли руководитель/админ -- позже). Сессия
+    // строится напрямую из Manager, без строки в users.
+    const token = signSession({ id: manager.id, username: manager.name, role: 'TP', managerId: manager.id });
     res.cookie(COOKIE_NAME, token, {
       httpOnly: true,
       sameSite: 'lax',
