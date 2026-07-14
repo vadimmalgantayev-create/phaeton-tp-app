@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
+require('dotenv').config();
 const path = require('path');
 const { PrismaClient } = require('@prisma/client');
 const { loadAll } = require('./load');

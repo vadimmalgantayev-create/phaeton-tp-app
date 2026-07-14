@@ -57,7 +57,7 @@ router.get('/orders/:id', async (req, res, next) => {
   try {
     const data = await assertOrderAccess(req, res, Number(req.params.id));
     if (!data) return;
-    res.render('orderDetail', { ...data, user: req.user });
+    res.render('orderDetail', { ...data, user: req.user, overstockWarning: null });
   } catch (err) {
     next(err);
   }
@@ -82,6 +82,21 @@ router.post('/orders/:id/export', async (req, res, next) => {
     const data = await assertOrderAccess(req, res, orderId);
     if (!data) return;
     if (data.lines.length === 0) return res.status(400).send('В заказе нет позиций');
+
+    // ТЗ 6.5: "контроль остатка/ДЗ" при формировании заказа. Жёсткость
+    // (полный запрет vs предупреждение) была открытым вопросом -- здесь
+    // выбран мягкий, но реальный контроль: экспорт с превышением остатка
+    // требует явного подтверждения пользователем, а не проходит тихо (ранее
+    // это была только визуальная плашка в интерфейсе без какого-либо
+    // эффекта на сам экспорт -- баг, отмеченный QA в PHA-70).
+    const overstockLines = data.lines.filter((l) => l.insufficientStock);
+    if (overstockLines.length > 0 && (!req.body || req.body.confirmOverstock !== '1')) {
+      return res.status(409).render('orderDetail', {
+        ...data,
+        user: req.user,
+        overstockWarning: overstockLines.length,
+      });
+    }
 
     const lines = data.lines.map((l) => ({
       brand: l.brand,

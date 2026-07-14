@@ -2,10 +2,20 @@
 
 const jwt = require('jsonwebtoken');
 
-// ⚑ Открытый вопрос: нет секрет-менеджера в этом окружении. JWT_SECRET
-// должен быть задан в проде (render.yaml/переменные окружения); здесь
-// используется dev-заглушка только чтобы локальный запуск не падал.
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-insecure-secret-change-me';
+// Раньше здесь был дефолт-заглушка на случай отсутствия JWT_SECRET -- это
+// был обход авторизации: репозиторий публичный, значение дефолта было бы
+// известно кому угодно, и на деплое без явно заданного секрета сервер тихо
+// подписывал бы токены им (см. разбор в PHA-68/PHA-70). Секрет обязателен:
+// без него сервер должен падать при старте, а не работать в незащищённом
+// режиме.
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error(
+    'JWT_SECRET не задан. Сгенерируйте случайный секрет и добавьте в .env ' +
+    '(node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))") ' +
+    'или в переменные окружения деплоя (Render: значение генерируется автоматически, см. render.yaml).'
+  );
+}
 const COOKIE_NAME = 'phaeton_session';
 const EXPIRES_IN = '12h';
 

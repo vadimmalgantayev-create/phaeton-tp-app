@@ -20,6 +20,12 @@
       </div>
     <% } %>
 
+    <% if (overstockWarning) { %>
+      <div class="card">
+        <p class="attention-debt">Превышен остаток по позициям: <%= overstockWarning %>. Выгрузка отклонена -- подтвердите ниже, если нужно выгрузить как есть.</p>
+      </div>
+    <% } %>
+
     <div class="card">
       <h2>Позиции (<%= order.status === 'exported' ? 'выгружен' : 'черновик' %>)</h2>
       <% if (lines.length === 0) { %>
@@ -46,8 +52,14 @@
     <div class="card">
       <h2>Итого: <%= Math.round(total).toLocaleString('ru-RU') %></h2>
       <a class="weight-badge" href="/catalog?clientId=<%= order.clientId %>">Добавить товар</a>
+      <% var hasOverstock = lines.some(function (l) { return l.insufficientStock; }); %>
       <% if (lines.length > 0) { %>
-        <form method="post" action="/orders/<%= order.id %>/export">
+        <form method="post" action="/orders/<%= order.id %>/export" class="form">
+          <% if (hasOverstock) { %>
+            <label class="form-label">
+              <input type="checkbox" name="confirmOverstock" value="1"> Подтверждаю превышение остатка и выгружаю как есть
+            </label>
+          <% } %>
           <button class="form-button" type="submit">Выгрузить в шаблон 1С</button>
         </form>
       <% } %>
