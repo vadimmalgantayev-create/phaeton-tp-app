@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Пользователи — Phaeton ТП</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="screen">
+    <div class="header">
+      <h1>Пользователи</h1>
+    </div>
+
+    <% if (error) { %><div class="card"><p class="attention-debt"><%= error %></p></div><% } %>
+    <% if (generatedPassword) { %>
+      <div class="card">
+        <p class="empty-state">Временный пароль (сообщите пользователю лично, он больше не показывается): <b><%= generatedPassword %></b></p>
+      </div>
+    <% } %>
+
+    <div class="card">
+      <h2>Новый пользователь</h2>
+      <form method="post" action="/admin/users" class="form">
+        <label class="form-label">Логин</label>
+        <input class="form-input" type="text" name="username" required>
+        <label class="form-label">Роль</label>
+        <select class="form-input" name="role">
+          <option value="TP">ТП</option>
+          <option value="RUKOVODITEL">Руководитель</option>
+          <option value="ADMIN">Администратор</option>
+        </select>
+        <label class="form-label">ID менеджера (только для роли ТП)</label>
+        <input class="form-input" type="number" name="managerId">
+        <button class="form-button" type="submit">Создать</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Список</h2>
+      <% users.forEach(function(u) { %>
+        <div class="task-row">
+          <div class="task-name">
+            <%= u.username %> — <%= u.role %><% if (u.manager) { %> (<%= u.manager.name %>)<% } %>
+            <% if (!u.isActive) { %><span class="badge-stub">отключён</span><% } %>
+          </div>
+          <form method="post" action="/admin/users/<%= u.id %>/reset-password" style="display:inline">
+            <button class="weight-badge" type="submit">Сброс пароля</button>
+          </form>
+          <form method="post" action="/admin/users/<%= u.id %>/toggle-active" style="display:inline">
+            <button class="weight-badge" type="submit"><%= u.isActive ? 'Отключить' : 'Включить' %></button>
+          </form>
+        </div>
+      <% }) %>
+    </div>
+  </div>
+</body>
+</html>

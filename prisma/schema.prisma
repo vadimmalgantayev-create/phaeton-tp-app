@@ -37,9 +37,85 @@ model Manager {
   acbPlans  AcbPlan[]
   salesFacts SalesFact[]
   missingInvoices MissingInvoice[]
+  user      User?
+  routeVisits RouteVisit[]
 
   @@unique([name, regionId])
   @@map("managers")
+}
+
+// Логин/роль (ТЗ 6.1). ТП привязан к конкретному Manager (данные каталога/
+// дашборда скоупятся по managerId); Руководитель/Администратор — без
+// привязки, видят данные по региону/всей компании (см. rbac.js).
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String
+  role         String   // "TP" | "RUKOVODITEL" | "ADMIN"
+  isActive     Boolean  @default(true)
+  manager      Manager? @relation(fields: [managerId], references: [id])
+  managerId    Int?     @unique
+  createdAt    DateTime @default(now())
+  notes        Note[]
+  orders       Order[]
+
+  @@map("users")
+}
+
+model Note {
+  id        Int      @id @default(autoincrement())
+  client    Client   @relation(fields: [clientId], references: [id])
+  clientId  Int
+  author    User     @relation(fields: [authorId], references: [id])
+  authorId  Int
+  text      String
+  createdAt DateTime @default(now())
+
+  @@map("notes")
+}
+
+model Order {
+  id          Int         @id @default(autoincrement())
+  client      Client      @relation(fields: [clientId], references: [id])
+  clientId    Int
+  createdBy   User        @relation(fields: [createdById], references: [id])
+  createdById Int
+  status      String      @default("draft") // "draft" | "exported"
+  createdAt   DateTime    @default(now())
+  exportedAt  DateTime?
+  lines       OrderLine[]
+
+  @@map("orders")
+}
+
+model OrderLine {
+  id              Int     @id @default(autoincrement())
+  order           Order   @relation(fields: [orderId], references: [id])
+  orderId         Int
+  product         Product @relation(fields: [productId], references: [id])
+  productId       Int
+  quantity        Float
+  discountPercent Float
+  clientPrice     Float
+  supplierPrice   Float
+
+  @@map("order_lines")
+}
+
+// ТЗ 6.9: маршрут на день + гео-чек-ин у клиента.
+model RouteVisit {
+  id        Int       @id @default(autoincrement())
+  manager   Manager   @relation(fields: [managerId], references: [id])
+  managerId Int
+  client    Client    @relation(fields: [clientId], references: [id])
+  clientId  Int
+  day       DateTime  // start-of-day (UTC), one planned visit per client per day
+  visitedAt DateTime?
+  latitude  Float?
+  longitude Float?
+
+  @@unique([managerId, clientId, day])
+  @@map("route_visits")
 }
 
 model Client {
@@ -54,6 +130,9 @@ model Client {
   debt            Debt?
   salesFacts      SalesFact[]
   missingInvoices MissingInvoice[]
+  notes           Note[]
+  orders          Order[]
+  routeVisits     RouteVisit[]
 
   // Intentionally no unique(name, managerId): the addresses file (the only
   // source with a real client code) has real cases of two different codes
@@ -94,6 +173,7 @@ model Product {
   application          String?
   isServiceRow         Boolean  @default(false) // no price -> служебная строка, скрыть из каталога
   stocks               Stock[]
+  orderLines           OrderLine[]
 
   @@unique([article, brand])
   @@map("products")

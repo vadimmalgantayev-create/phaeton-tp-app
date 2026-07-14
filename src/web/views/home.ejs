@@ -8,6 +8,7 @@
 </head>
 <body>
   <div class="screen">
+    <%- include('partials/nav', { user }) %>
     <div class="header">
       <p class="eyebrow"><%= new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(month) %></p>
       <h1>Здравствуйте<%= managerName ? ', ' + managerName.split(' ')[1] || managerName : '' %></h1>

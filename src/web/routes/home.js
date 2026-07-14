@@ -7,8 +7,9 @@ const router = express.Router();
 
 router.get('/', async (req, res, next) => {
   try {
-    const data = await getDashboardData();
-    res.render('home', data);
+    if (req.user.role !== 'TP') return res.redirect('/manager');
+    const data = await getDashboardData(req.user.managerId);
+    res.render('home', { ...data, user: req.user });
   } catch (err) {
     next(err);
   }

@@ -1,0 +1,20 @@
+<div class="nav">
+  <% if (user.role === 'TP') { %>
+    <a href="/">Главная</a>
+    <a href="/catalog">Каталог</a>
+    <a href="/clients">Клиенты</a>
+    <a href="/notifications">Уведомления</a>
+    <a href="/route">Маршрут</a>
+  <% } %>
+  <% if (user.role === 'RUKOVODITEL') { %>
+    <a href="/manager">Руководитель</a>
+  <% } %>
+  <% if (user.role === 'ADMIN') { %>
+    <a href="/manager">Руководитель</a>
+    <a href="/admin/users">Пользователи</a>
+  <% } %>
+  <a href="/account/password">Пароль</a>
+  <form method="post" action="/logout" style="display:inline">
+    <button class="weight-badge" type="submit" style="background:none;border:none;color:#9a9fab;cursor:pointer">Выйти</button>
+  </form>
+</div>

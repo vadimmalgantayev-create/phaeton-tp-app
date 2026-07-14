@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Вход — Phaeton ТП</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="screen">
+    <div class="header">
+      <h1>Вход в Phaeton ТП</h1>
+    </div>
+    <div class="card">
+      <% if (error) { %>
+        <p class="attention-debt"><%= error %></p>
+      <% } %>
+      <form method="post" action="/login" class="form">
+        <label class="form-label">Логин</label>
+        <input class="form-input" type="text" name="username" autocomplete="username" required>
+        <label class="form-label">Пароль</label>
+        <input class="form-input" type="password" name="password" autocomplete="current-password" required>
+        <button class="form-button" type="submit">Войти</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

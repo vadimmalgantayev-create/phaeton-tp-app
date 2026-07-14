@@ -4,18 +4,11 @@ const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
-// Пока нет экрана входа (PHA-75 явно исключает логин из своей области —
-// см. "ГРАНИЦЫ" в задаче), дашборд показывает данные одного ТП по
-// фиксированному managerId. Это временное допущение: как только появится
-// авторизация, currentManagerId должен браться из сессии пользователя, а не
-// быть константой.
-const PLACEHOLDER_MANAGER_ID = 11;
-
 function startOfMonth(date) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
 }
 
-async function getDashboardData(managerId = PLACEHOLDER_MANAGER_ID) {
+async function getDashboardData(managerId) {
   const month = startOfMonth(new Date());
 
   const manager = await prisma.manager.findUnique({ where: { id: managerId } });
@@ -103,4 +96,4 @@ async function getDashboardData(managerId = PLACEHOLDER_MANAGER_ID) {
   };
 }
 
-module.exports = { getDashboardData, PLACEHOLDER_MANAGER_ID };
+module.exports = { getDashboardData };
