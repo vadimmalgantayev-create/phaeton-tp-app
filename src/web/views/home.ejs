@@ -67,6 +67,25 @@
         <% }) %>
       <% } %>
     </div>
+
+    <div class="card">
+      <h2>Требует внимания — нет накладных</h2>
+      <% if (missingInvoiceRisks.length === 0) { %>
+        <p class="empty-state">Клиентов без накладных не найдено</p>
+      <% } else { %>
+        <% missingInvoiceRisks.forEach(function(m) { %>
+          <div class="attention-row">
+            <div class="attention-client"><%= m.clientName %></div>
+            <div class="attention-debt">
+              <%= m.orderRef %>
+              <% if (m.deliveryVariant) { %>
+                <span class="attention-date"><%= m.deliveryVariant %></span>
+              <% } %>
+            </div>
+          </div>
+        <% }) %>
+      <% } %>
+    </div>
   </div>
 </body>
 </html>

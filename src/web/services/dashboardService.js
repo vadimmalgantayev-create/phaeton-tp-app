@@ -20,7 +20,7 @@ async function getDashboardData(managerId = PLACEHOLDER_MANAGER_ID) {
 
   const manager = await prisma.manager.findUnique({ where: { id: managerId } });
 
-  const [revenueAgg, totalPlan, weightedTasks, acbPlan, overdueDebts] = await Promise.all([
+  const [revenueAgg, totalPlan, weightedTasks, acbPlan, overdueDebts, missingInvoices] = await Promise.all([
     prisma.salesFact.aggregate({
       _sum: { revenueEur: true },
       where: { managerId, month },
@@ -37,6 +37,11 @@ async function getDashboardData(managerId = PLACEHOLDER_MANAGER_ID) {
       where: { isOverdue: true, client: { managerId } },
       include: { client: true },
       orderBy: { totalDebt: 'desc' },
+      take: 8,
+    }),
+    prisma.missingInvoice.findMany({
+      where: { managerId },
+      include: { client: true },
       take: 8,
     }),
   ]);
@@ -63,9 +68,15 @@ async function getDashboardData(managerId = PLACEHOLDER_MANAGER_ID) {
   }));
   if (acbPlan) {
     paidTasks.push({
-      name: 'АЦБ (активная клиентская база)',
+      name: 'АКБ общий (активная клиентская база)',
       weightPct: acbPlan.weightPct,
       planValue: acbPlan.acbTotal,
+      unit: 'клиентов',
+    });
+    paidTasks.push({
+      name: 'АКБ масло',
+      weightPct: acbPlan.weightPct,
+      planValue: acbPlan.acbOil,
       unit: 'клиентов',
     });
   }
@@ -76,12 +87,19 @@ async function getDashboardData(managerId = PLACEHOLDER_MANAGER_ID) {
     nearestPaymentDate: d.nearestPaymentDate,
   }));
 
+  const missingInvoiceRisks = missingInvoices.map((m) => ({
+    clientName: m.client.name,
+    orderRef: m.orderRef,
+    deliveryVariant: m.deliveryVariant,
+  }));
+
   return {
     managerName: manager ? manager.name : null,
     month,
     turnover,
     paidTasks,
     attention,
+    missingInvoiceRisks,
   };
 }
 
