@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title><%= client.name %> — Phaeton ТП</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="screen">
+    <%- include('partials/nav', { user }) %>
+    <div class="header">
+      <h1><%= client.name %></h1>
+    </div>
+
+    <div class="card">
+      <h2>Реквизиты</h2>
+      <p class="empty-state">Код: <%= client.code || '—' %></p>
+      <p class="empty-state">Менеджер: <%= client.manager ? client.manager.name : '—' %></p>
+      <p class="empty-state">Маршрут: <%= client.route || '—' %></p>
+      <% client.addresses.forEach(function(a) { %>
+        <p class="empty-state">
+          <%= a.isPrimary ? '★ ' : '' %><%= a.city %>, <%= a.deliveryAddress %>
+          <% if (a.deliveryType) { %>(<%= a.deliveryType %>)<% } %>
+          <% if (a.phone) { %>· <%= a.phone %><% } %>
+        </p>
+      <% }) %>
+      <a class="weight-badge" href="/orders/new?clientId=<%= client.id %>">Оформить заказ</a>
+    </div>
+
+    <div class="card">
+      <h2>Скидки</h2>
+      <% if (client.discounts.length === 0 && regionDefaults.length === 0) { %>
+        <p class="empty-state">Скидок не найдено</p>
+      <% } %>
+      <% client.discounts.forEach(function(d) { %>
+        <div class="task-row">
+          <div class="task-name"><%= d.brand %> <span class="task-target">индивидуальная<% if (d.validUntil) { %>, до <%= new Intl.DateTimeFormat('ru-RU').format(d.validUntil) %><% } %></span></div>
+          <div class="weight-badge"><%= d.percent %>%</div>
+        </div>
+      <% }) %>
+      <% regionDefaults.forEach(function(d) { %>
+        <div class="task-row">
+          <div class="task-name"><%= d.brand %> <span class="task-target">по региону<% if (d.validUntil) { %>, до <%= new Intl.DateTimeFormat('ru-RU').format(d.validUntil) %><% } %></span></div>
+          <div class="weight-badge"><%= d.percent %>%</div>
+        </div>
+      <% }) %>
+    </div>
+
+    <div class="card">
+      <h2>Задолженность</h2>
+      <% if (!client.debt) { %>
+        <p class="empty-state">Данных по ДЗ нет</p>
+      <% } else { %>
+        <p class="empty-state">Общая ДЗ: <%= Math.round(client.debt.totalDebt).toLocaleString('ru-RU') %><% if (client.debt.limitAmount) { %> / лимит <%= Math.round(client.debt.limitAmount).toLocaleString('ru-RU') %><% } %></p>
+        <% if (client.debt.isOverdue) { %><p class="attention-debt">Просрочено<% if (client.debt.nearestPaymentDate) { %>, ближайший платёж: <%= new Intl.DateTimeFormat('ru-RU').format(client.debt.nearestPaymentDate) %><% } %></p><% } %>
+      <% } %>
+      <% if (client.missingInvoices.length > 0) { %>
+        <p class="attention-debt">Нет накладных: <%= client.missingInvoices.length %></p>
+        <% client.missingInvoices.forEach(function(m) { %>
+          <p class="empty-state"><%= m.orderRef %></p>
+        <% }) %>
+      <% } %>
+    </div>
+
+    <div class="card">
+      <h2>История продаж</h2>
+      <% if (salesHistory.length === 0) { %>
+        <p class="empty-state">Продаж не найдено</p>
+      <% } else { %>
+        <% salesHistory.forEach(function(s) { %>
+          <div class="task-row">
+            <div class="task-name"><%= new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(s.month) %> · <%= s.brand %></div>
+            <div class="weight-badge"><%= Math.round(s.revenueEur).toLocaleString('ru-RU') %></div>
+          </div>
+        <% }) %>
+      <% } %>
+    </div>
+
+    <div class="card">
+      <h2>Заметки</h2>
+      <form method="post" action="/clients/<%= client.id %>/notes" class="form">
+        <textarea class="form-input" name="text" rows="2" placeholder="Новая заметка" required></textarea>
+        <button class="form-button" type="submit">Добавить</button>
+      </form>
+      <% client.notes.forEach(function(n) { %>
+        <div class="task-row">
+          <div class="task-name">
+            <%= n.text %>
+            <span class="task-target"><%= n.author.username %> · <%= new Intl.DateTimeFormat('ru-RU').format(n.createdAt) %></span>
+          </div>
+        </div>
+      <% }) %>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Клиенты — Phaeton ТП</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="screen">
+    <%- include('partials/nav', { user }) %>
+    <div class="header">
+      <h1>Клиенты</h1>
+    </div>
+
+    <div class="card">
+      <form method="get" action="/clients" class="form">
+        <input class="form-input" type="text" name="q" placeholder="Поиск: имя, код" value="<%= q || '' %>">
+        <button class="form-button" type="submit">Найти</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <p class="empty-state">Найдено: <%= total %> (<%= page %>/<%= totalPages %>)</p>
+      <% items.forEach(function(c) { %>
+        <a href="/clients/<%= c.id %>" style="text-decoration:none;color:inherit">
+          <div class="attention-row">
+            <div class="attention-client">
+              <%= c.name %>
+              <% if (c.managerName) { %><span class="attention-date"><%= c.managerName %></span><% } %>
+            </div>
+            <div class="attention-debt">
+              <% if (c.isOverdue) { %><span class="badge-stub">просрочка</span><% } %>
+              <% if (c.hasMissingInvoice) { %><span class="badge-stub">нет накладных</span><% } %>
+            </div>
+          </div>
+        </a>
+      <% }) %>
+    </div>
+
+    <div class="card">
+      <div class="nav">
+        <% if (page > 1) { %><a href="?q=<%= q||'' %>&page=<%= page - 1 %>">← назад</a><% } %>
+        <% if (page < totalPages) { %><a href="?q=<%= q||'' %>&page=<%= page + 1 %>">вперёд →</a><% } %>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
