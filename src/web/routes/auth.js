@@ -30,13 +30,33 @@ router.post('/login', async (req, res, next) => {
   try {
     const { managerId, password } = req.body;
     const managers = await prisma.manager.findMany({ orderBy: { name: 'asc' } });
-    const manager = managerId ? await prisma.manager.findUnique({ where: { id: Number(managerId) } }) : null;
+    const managerIdNum = Number(managerId);
+    const manager = Number.isInteger(managerIdNum)
+      ? await prisma.manager.findUnique({ where: { id: managerIdNum } })
+      : null;
     if (!manager || String(password || '') !== DEMO_PASSWORD) {
       return res.status(401).render('login', { error: 'Неверный менеджер или пароль', managers });
     }
-    // Вход всегда как TP (ТЗ: роли руководитель/админ -- позже). Сессия
-    // строится напрямую из Manager, без строки в users.
-    const token = signSession({ id: manager.id, username: manager.name, role: 'TP', managerId: manager.id });
+    // Вход всегда как TP (ТЗ: роли руководитель/админ -- позже). users
+    // пустая на эфемерной БД, поэтому под каждого менеджера здесь
+    // get-or-create'ится настоящая строка User (а не подставляется
+    // manager.id вместо user.id в сессию) -- иначе Note.authorId/
+    // Order.createdById (реальные FK на users) падают на первой же
+    // заметке/заказе, т.к. такой строки users нет (см. QA PHA-78).
+    // passwordHash сразу захеширован от DEMO_PASSWORD, чтобы
+    // /account/password тоже был согласован с этим входом, а не всегда
+    // отвечал "неверный пароль".
+    const user = await prisma.user.upsert({
+      where: { managerId: manager.id },
+      update: {},
+      create: {
+        username: `tp-manager-${manager.id}`,
+        role: 'TP',
+        managerId: manager.id,
+        passwordHash: await bcrypt.hash(DEMO_PASSWORD, 10),
+      },
+    });
+    const token = signSession(user);
     res.cookie(COOKIE_NAME, token, {
       httpOnly: true,
       sameSite: 'lax',
