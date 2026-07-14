@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Уведомления — Phaeton ТП</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="screen">
+    <%- include('partials/nav', { user }) %>
+    <div class="header">
+      <h1>Уведомления</h1>
+    </div>
+
+    <div class="card">
+      <% if (items.length === 0) { %>
+        <p class="empty-state">Активных уведомлений нет</p>
+      <% } else { %>
+        <% items.forEach(function(n) { %>
+          <a href="/clients/<%= n.clientId %>" style="text-decoration:none;color:inherit">
+            <div class="attention-row">
+              <div class="attention-client">
+                <%= n.title %>
+                <span class="attention-date"><%= n.clientName %></span>
+              </div>
+              <div class="attention-debt"><%= n.detail %></div>
+            </div>
+          </a>
+        <% }) %>
+      <% } %>
+    </div>
+  </div>
+</body>
+</html>

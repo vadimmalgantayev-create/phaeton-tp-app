@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Маршрут — Phaeton ТП</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="screen">
+    <%- include('partials/nav', { user }) %>
+    <div class="header">
+      <h1>Маршрут на сегодня</h1>
+    </div>
+
+    <div class="card">
+      <% if (stops.length === 0) { %>
+        <p class="empty-state">Нет клиентов с геокоординатами</p>
+      <% } else { %>
+        <% stops.forEach(function(s) { %>
+          <div class="task-row" id="stop-<%= s.clientId %>">
+            <div class="task-name">
+              <a href="/clients/<%= s.clientId %>" style="color:inherit"><%= s.clientName %></a>
+              <span class="task-target"><%= s.route || '' %><% if (s.city) { %> · <%= s.city %><% } %></span>
+              <span class="task-target visit-status">
+                <% if (s.visitedAt) { %>Отмечен: <%= new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit' }).format(s.visitedAt) %><% } else { %>Не посещён<% } %>
+              </span>
+            </div>
+            <% if (!s.visitedAt) { %>
+              <button class="weight-badge checkin-btn" data-client-id="<%= s.clientId %>" type="button">Отметиться</button>
+            <% } %>
+          </div>
+        <% }) %>
+      <% } %>
+    </div>
+  </div>
+
+  <script>
+    // Гео-чек-ин (ТЗ 6.9): берём координаты браузера в момент нажатия;
+    // офлайн-буферизация трека реализована отдельно в offline.js (IndexedDB
+    // очередь + фоновая синхронизация при восстановлении сети).
+    document.querySelectorAll('.checkin-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var clientId = btn.dataset.clientId;
+        function send(latitude, longitude) {
+          var payload = { latitude: latitude, longitude: longitude };
+          if (!navigator.onLine && window.phaetonOffline) {
+            window.phaetonOffline.queueCheckin(clientId, payload);
+            markVisited(clientId, true);
+            return;
+          }
+          fetch('/route/' + clientId + '/checkin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }).then(function (r) {
+            if (r.ok) markVisited(clientId, false);
+          }).catch(function () {
+            if (window.phaetonOffline) {
+              window.phaetonOffline.queueCheckin(clientId, payload);
+              markVisited(clientId, true);
+            }
+          });
+        }
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            function (pos) { send(pos.coords.latitude, pos.coords.longitude); },
+            function () { send(null, null); }
+          );
+        } else {
+          send(null, null);
+        }
+      });
+    });
+
+    function markVisited(clientId, queued) {
+      var row = document.getElementById('stop-' + clientId);
+      if (!row) return;
+      row.querySelector('.visit-status').textContent = queued ? 'Отмечен офлайн (будет синхронизировано)' : 'Отмечен только что';
+      var btn = row.querySelector('.checkin-btn');
+      if (btn) btn.remove();
+    }
+  </script>
+</body>
+</html>
