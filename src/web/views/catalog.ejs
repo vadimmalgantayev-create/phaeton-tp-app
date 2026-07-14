@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Каталог — Phaeton ТП</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="screen">
+    <%- include('partials/nav', { user }) %>
+    <div class="header">
+      <h1>Каталог<%= clientName ? ' — ' + clientName : '' %></h1>
+    </div>
+
+    <div class="card">
+      <form method="get" action="/catalog" class="form">
+        <% if (clientId) { %><input type="hidden" name="clientId" value="<%= clientId %>"><% } %>
+        <input class="form-input" type="text" name="q" placeholder="Поиск: артикул, название" value="<%= q || '' %>">
+        <select class="form-input" name="brand" onchange="this.form.submit()">
+          <option value="">Все бренды</option>
+          <% brands.forEach(function(b) { %>
+            <option value="<%= b %>" <%= b === brand ? 'selected' : '' %>><%= b %></option>
+          <% }) %>
+        </select>
+        <button class="form-button" type="submit">Найти</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <p class="empty-state">Найдено: <%= total %> (<%= page %>/<%= totalPages %>)</p>
+      <% items.forEach(function(p) { %>
+        <div class="task-row">
+          <div class="task-name">
+            <b><%= p.name %></b>
+            <span class="task-target"><%= p.brand %> · <%= p.article %></span>
+            <span class="task-target">
+              <% if (p.clientPrice !== null) { %>
+                Цена клиента: <%= p.clientPrice.toLocaleString('ru-RU') %> (скидка <%= p.discountPercent %>%),
+                без скидки: <%= p.priceGross ? p.priceGross.toLocaleString('ru-RU') : '—' %>
+              <% } else { %>
+                Цена: <%= p.priceNet !== null ? p.priceNet.toLocaleString('ru-RU') : '—' %>,
+                без скидки: <%= p.priceGross !== null ? p.priceGross.toLocaleString('ru-RU') : '—' %>
+              <% } %>
+            </span>
+            <span class="task-target">
+              Остатки:
+              <% if (p.stocks.length === 0) { %>нет данных<% } %>
+              <% p.stocks.forEach(function(s, i) { %><%= i > 0 ? ', ' : '' %><%= s.warehouse %>: <%= s.quantity %><% }) %>
+            </span>
+          </div>
+          <% if (clientId) { %>
+            <a class="weight-badge" href="/orders/new?clientId=<%= clientId %>&productId=<%= p.id %>">В заказ</a>
+          <% } %>
+        </div>
+      <% }) %>
+    </div>
+
+    <div class="card">
+      <div class="nav">
+        <% if (page > 1) { %><a href="?q=<%= q||'' %>&brand=<%= brand||'' %>&clientId=<%= clientId||'' %>&page=<%= page - 1 %>">← назад</a><% } %>
+        <% if (page < totalPages) { %><a href="?q=<%= q||'' %>&brand=<%= brand||'' %>&clientId=<%= clientId||'' %>&page=<%= page + 1 %>">вперёд →</a><% } %>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
