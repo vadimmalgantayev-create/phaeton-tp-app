@@ -31,18 +31,12 @@
 
     <div class="card">
       <h2>Скидки</h2>
-      <% if (client.discounts.length === 0 && regionDefaults.length === 0) { %>
-        <p class="empty-state">Скидок не найдено</p>
+      <% if (client.discounts.length === 0) { %>
+        <p class="empty-state">Индивидуальных скидок не найдено</p>
       <% } %>
       <% client.discounts.forEach(function(d) { %>
         <div class="task-row">
           <div class="task-name"><%= d.brand %> <span class="task-target">индивидуальная<% if (d.validUntil) { %>, до <%= new Intl.DateTimeFormat('ru-RU').format(d.validUntil) %><% } %></span></div>
-          <div class="weight-badge"><%= d.percent %>%</div>
-        </div>
-      <% }) %>
-      <% regionDefaults.forEach(function(d) { %>
-        <div class="task-row">
-          <div class="task-name"><%= d.brand %> <span class="task-target">по региону<% if (d.validUntil) { %>, до <%= new Intl.DateTimeFormat('ru-RU').format(d.validUntil) %><% } %></span></div>
           <div class="weight-badge"><%= d.percent %>%</div>
         </div>
       <% }) %>
@@ -65,9 +59,9 @@
     </div>
 
     <div class="card">
-      <h2>История продаж</h2>
+      <h2>История продаж (<%= new Date().getFullYear() %>)</h2>
       <% if (salesHistory.length === 0) { %>
-        <p class="empty-state">Продаж не найдено</p>
+        <p class="empty-state">Продаж в этом году не найдено</p>
       <% } else { %>
         <% salesHistory.forEach(function(s) { %>
           <div class="task-row">

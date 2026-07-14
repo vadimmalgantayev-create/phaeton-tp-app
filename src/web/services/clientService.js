@@ -44,6 +44,20 @@ async function listClients({ managerIds, q, page = 1 } = {}) {
 // хранятся только на уровне менеджера) -- показываем факт (историю продаж),
 // а не план/факт по клиенту: додумывать несуществующий клиентский план
 // было бы додумыванием бизнес-данных, которых нет ни в ТЗ, ни в источниках.
+//
+// Скидки на карточке -- только индивидуальные скидки ЭТОГО клиента
+// (client.discounts, clientId != null в "Действующие скидки"). Региональная
+// база (Discount с clientId: null) сюда намеренно не подмешивается: это
+// одни и те же ~130 строк для всех клиентов региона, и раньше они
+// перекрывали единичные индивидуальные скидки в списке, из-за чего на
+// любой карточке было видно один и тот же набор "по региону 10%" (PHA-80,
+// баг 1). Региональная база остаётся источником фолбэка для цены заказа
+// (см. resolveDiscountPercent в pricing.js/catalogService.js/orderService.js)
+// -- там её убирать нельзя, это отдельный экран/расчёт.
+//
+// История продаж -- только текущий календарный год (PHA-80, баг 2): было
+// `take: 12` без фильтра по году, что подмешивало старые периоды прошлого
+// года для клиентов с менее чем 12 продажами в этом году.
 async function getClientDetail(clientId) {
   const client = await prisma.client.findUnique({
     where: { id: clientId },
@@ -58,17 +72,16 @@ async function getClientDetail(clientId) {
   });
   if (!client) return null;
 
-  const regionDefaults = client.manager
-    ? await prisma.discount.findMany({ where: { regionId: client.manager.regionId, clientId: null } })
-    : [];
-
+  const currentYear = new Date().getFullYear();
   const salesHistory = await prisma.salesFact.findMany({
-    where: { clientId },
+    where: {
+      clientId,
+      month: { gte: new Date(Date.UTC(currentYear, 0, 1)), lt: new Date(Date.UTC(currentYear + 1, 0, 1)) },
+    },
     orderBy: { month: 'desc' },
-    take: 12,
   });
 
-  return { client, regionDefaults, salesHistory };
+  return { client, salesHistory };
 }
 
 async function addNote(clientId, authorId, text) {
