@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Кабинет руководителя — Phaeton ТП</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="screen">
+    <%- include('partials/nav', { user }) %>
+    <div class="header">
+      <p class="eyebrow"><%= new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(month) %></p>
+      <h1>Кабинет руководителя</h1>
+    </div>
+
+    <div class="card">
+      <h2>Товарооборот команды</h2>
+      <div class="turnover-row">
+        <div class="progress-ring" style="--pct: <%= teamTotals.percent !== null ? Math.min(teamTotals.percent, 100) : 0 %>">
+          <div class="inner"><%= teamTotals.percent !== null ? teamTotals.percent + '%' : '—' %></div>
+        </div>
+        <div class="turnover-details">
+          <p class="amount"><%= Math.round(teamTotals.actual).toLocaleString('ru-RU') %></p>
+          <p class="plan">план: <%= Math.round(teamTotals.plan).toLocaleString('ru-RU') %></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>План/факт по ТП</h2>
+      <% team.forEach(function(t) { %>
+        <div class="task-row">
+          <div class="task-name">
+            <%= t.managerName %>
+            <span class="task-target"><%= t.regionName %> · факт <%= Math.round(t.actual).toLocaleString('ru-RU') %><% if (t.plan) { %> / план <%= Math.round(t.plan).toLocaleString('ru-RU') %><% } %></span>
+          </div>
+          <div class="weight-badge"><%= t.percent !== null ? t.percent + '%' : '—' %></div>
+        </div>
+      <% }) %>
+    </div>
+
+    <div class="card">
+      <h2>Задолженность по региону (просрочка)</h2>
+      <% if (regionDebt.length === 0) { %>
+        <p class="empty-state">Просроченной задолженности не найдено</p>
+      <% } else { %>
+        <% regionDebt.forEach(function(r) { %>
+          <div class="attention-row">
+            <div class="attention-client"><%= r.regionName %></div>
+            <div class="attention-debt"><%= Math.round(r.total).toLocaleString('ru-RU') %></div>
+          </div>
+        <% }) %>
+      <% } %>
+    </div>
+  </div>
+</body>
+</html>

@@ -12,6 +12,7 @@ const clientsRouter = require('./routes/clients');
 const ordersRouter = require('./routes/orders');
 const notificationsRouter = require('./routes/notifications');
 const routeRouter = require('./routes/route');
+const managerRouter = require('./routes/manager');
 
 function createApp() {
   const app = express();
@@ -32,6 +33,7 @@ function createApp() {
   app.use('/', requireAuth, ordersRouter);
   app.use('/', requireAuth, notificationsRouter);
   app.use('/', requireAuth, routeRouter);
+  app.use('/', requireAuth, managerRouter);
 
   app.use((err, req, res, next) => {
     console.error(err);
