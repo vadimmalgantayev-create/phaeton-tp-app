@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Заказ #<%= order.id %> — Phaeton ТП</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="screen">
+    <%- include('partials/nav', { user }) %>
+    <div class="header">
+      <h1>Заказ для <%= order.client.name %></h1>
+    </div>
+
+    <% if (order.client.debt && order.client.debt.isOverdue) { %>
+      <div class="card">
+        <p class="attention-debt">У клиента просроченная задолженность: <%= Math.round(order.client.debt.totalDebt).toLocaleString('ru-RU') %>. Оформление заказа не заблокировано (открытый вопрос жёсткости блокировки в ТЗ), но требует внимания.</p>
+      </div>
+    <% } %>
+
+    <div class="card">
+      <h2>Позиции (<%= order.status === 'exported' ? 'выгружен' : 'черновик' %>)</h2>
+      <% if (lines.length === 0) { %>
+        <p class="empty-state">Пусто. Добавьте товары из <a href="/catalog?clientId=<%= order.clientId %>">каталога</a>.</p>
+      <% } %>
+      <% lines.forEach(function(l) { %>
+        <div class="task-row">
+          <div class="task-name">
+            <%= l.productName %>
+            <span class="task-target"><%= l.brand %> · <%= l.article %> · скидка <%= l.discountPercent %>%</span>
+            <span class="task-target">
+              <%= l.clientPrice.toLocaleString('ru-RU') %> × <%= l.quantity %> = <%= Math.round(l.lineTotal).toLocaleString('ru-RU') %>
+              <% if (l.insufficientStock) { %><span class="badge-stub">остаток <%= l.totalStock %></span><% } %>
+            </span>
+          </div>
+          <form method="post" action="/orders/<%= order.id %>/lines/<%= l.id %>" class="form" style="flex-direction:row;gap:6px">
+            <input class="form-input" style="width:64px" type="number" name="quantity" min="0" value="<%= l.quantity %>">
+            <button class="weight-badge" type="submit">Сохранить</button>
+          </form>
+        </div>
+      <% }) %>
+    </div>
+
+    <div class="card">
+      <h2>Итого: <%= Math.round(total).toLocaleString('ru-RU') %></h2>
+      <a class="weight-badge" href="/catalog?clientId=<%= order.clientId %>">Добавить товар</a>
+      <% if (lines.length > 0) { %>
+        <form method="post" action="/orders/<%= order.id %>/export">
+          <button class="form-button" type="submit">Выгрузить в шаблон 1С</button>
+        </form>
+      <% } %>
+    </div>
+  </div>
+</body>
+</html>

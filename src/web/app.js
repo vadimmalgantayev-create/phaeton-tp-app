@@ -9,6 +9,7 @@ const adminRouter = require('./routes/admin');
 const homeRouter = require('./routes/home');
 const catalogRouter = require('./routes/catalog');
 const clientsRouter = require('./routes/clients');
+const ordersRouter = require('./routes/orders');
 
 function createApp() {
   const app = express();
@@ -26,6 +27,7 @@ function createApp() {
   app.use('/', requireAuth, homeRouter);
   app.use('/', requireAuth, catalogRouter);
   app.use('/', requireAuth, clientsRouter);
+  app.use('/', requireAuth, ordersRouter);
 
   app.use((err, req, res, next) => {
     console.error(err);
