@@ -82,6 +82,18 @@ async function getClientDetail(clientId) {
   });
   if (!client) return null;
 
+  // Помечаем истёкшие индивидуальные скидки (validUntil < сегодня), а не
+  // просто выводим их как активные: `resolveDiscountPercent` в pricing.js
+  // отбрасывает такие при расчёте цены заказа по той же логике
+  // (`!validUntil || validUntil >= asOf`), так что без пометки карточка
+  // расходилась бы с тем, что реально применится к заказу (QA PHA-80).
+  // Активные -- сверху, истёкшие -- внизу, чтобы актуальное было видно сразу.
+  const now = new Date();
+  const isActive = (d) => !d.validUntil || d.validUntil >= now;
+  client.discounts = client.discounts
+    .map((d) => ({ ...d, isExpired: !isActive(d) }))
+    .sort((a, b) => Number(a.isExpired) - Number(b.isExpired));
+
   const currentYear = new Date().getFullYear();
   const salesHistory = await prisma.salesFact.findMany({
     where: {

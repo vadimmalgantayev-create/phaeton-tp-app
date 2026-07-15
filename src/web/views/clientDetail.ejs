@@ -36,7 +36,7 @@
       <% } %>
       <% client.discounts.forEach(function(d) { %>
         <div class="task-row">
-          <div class="task-name"><%= d.brand %> <span class="task-target">индивидуальная<% if (d.validUntil) { %>, до <%= new Intl.DateTimeFormat('ru-RU').format(d.validUntil) %><% } %></span></div>
+          <div class="task-name"><%= d.brand %> <span class="task-target">индивидуальная<% if (d.validUntil) { %>, до <%= new Intl.DateTimeFormat('ru-RU').format(d.validUntil) %><% } %><% if (d.isExpired) { %> · <span class="attention-debt">истекла, не применяется</span><% } %></span></div>
           <div class="weight-badge"><%= d.percent %>%</div>
         </div>
       <% }) %>
