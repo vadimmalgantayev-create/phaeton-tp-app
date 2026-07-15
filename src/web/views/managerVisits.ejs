@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Посещения — Phaeton ТП</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+</head>
+<body>
+  <div class="screen">
+    <%- include('partials/nav', { user }) %>
+    <div class="header">
+      <h1>Посещения ТП</h1>
+    </div>
+
+    <div class="card">
+      <form method="get" action="/manager/visits" class="form">
+        <label class="form-label">Период</label>
+        <select class="form-input" name="period">
+          <option value="day" <%= period === 'day' ? 'selected' : '' %>>День</option>
+          <option value="week" <%= period === 'week' ? 'selected' : '' %>>Неделя</option>
+          <option value="month" <%= period === 'month' ? 'selected' : '' %>>Месяц</option>
+        </select>
+
+        <label class="form-label">Бизнес-регион</label>
+        <select class="form-input" name="regionId">
+          <option value="">Все регионы</option>
+          <% regions.forEach(function(r) { %>
+            <option value="<%= r.id %>" <%= filters.regionId === r.id ? 'selected' : '' %>><%= r.name %></option>
+          <% }) %>
+        </select>
+
+        <label class="form-label">ТП</label>
+        <select class="form-input" name="managerId">
+          <option value="">Все ТП</option>
+          <% managers.forEach(function(m) { %>
+            <option value="<%= m.id %>" <%= filters.managerId === m.id ? 'selected' : '' %>><%= m.name %></option>
+          <% }) %>
+        </select>
+
+        <label class="form-label">Клиент</label>
+        <select class="form-input" name="clientId">
+          <option value="">Все клиенты</option>
+          <% clients.forEach(function(c) { %>
+            <option value="<%= c.id %>" <%= filters.clientId === c.id ? 'selected' : '' %>><%= c.name %></option>
+          <% }) %>
+        </select>
+
+        <button class="form-button" type="submit">Применить</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Найдено отметок: <%= rows.length %></h2>
+      <a class="form-button" style="display:block;text-align:center;text-decoration:none;margin-bottom:14px"
+         href="/manager/visits/export.xlsx?period=<%= period %>&regionId=<%= filters.regionId || '' %>&managerId=<%= filters.managerId || '' %>&clientId=<%= filters.clientId || '' %>">
+        Выгрузить Excel
+      </a>
+
+      <% if (rows.length === 0) { %>
+        <p class="empty-state">За выбранный период и фильтры отметок не найдено</p>
+      <% } else { %>
+        <% rows.forEach(function(v) { %>
+          <div class="attention-row">
+            <div class="attention-client">
+              <%= v.clientName %>
+              <span class="attention-date"><%= v.regionName %> · <%= v.managerName %></span>
+            </div>
+            <div class="attention-debt">
+              <% if (v.distanceM == null) { %>
+                <span class="badge-stub"><%= v.hasGeo ? 'нет координат клиента' : 'без гео' %></span>
+              <% } else { %>
+                <span class="<%= v.distanceM <= distanceOkThresholdM ? 'distance-ok' : 'distance-far' %>"><%= Math.round(v.distanceM) %> м</span>
+              <% } %>
+            </div>
+          </div>
+          <div class="task-target" style="padding:0 0 10px">
+            <%= new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(v.day) %>
+            · <%= new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit' }).format(v.visitedAt) %>
+            <% if (v.hasGeo && v.distanceM != null) { %> · гео есть<% } %>
+          </div>
+        <% }) %>
+      <% } %>
+    </div>
+  </div>
+</body>
+</html>

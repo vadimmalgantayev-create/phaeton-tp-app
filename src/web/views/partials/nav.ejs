@@ -8,9 +8,11 @@
   <% } %>
   <% if (user.role === 'RUKOVODITEL') { %>
     <a href="/manager">Руководитель</a>
+    <a href="/manager/visits">Посещения</a>
   <% } %>
   <% if (user.role === 'ADMIN') { %>
     <a href="/manager">Руководитель</a>
+    <a href="/manager/visits">Посещения</a>
     <a href="/admin/users">Пользователи</a>
   <% } %>
   <% if (user.role === 'TP') { %>

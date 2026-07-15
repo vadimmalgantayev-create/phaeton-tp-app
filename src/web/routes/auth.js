@@ -26,6 +26,36 @@ router.get('/login', async (req, res, next) => {
   }
 });
 
+// PHA-81: до этой задачи RUKOVODITEL/ADMIN не могли войти вообще -- форма
+// поддерживала только выбор менеджера + DEMO_PASSWORD (всегда вход как TP,
+// см. комментарий ниже про ТЗ "роли руководитель/админ -- позже"). Но
+// seedUsers.js уже создаёт rukovoditel/admin с реальным passwordHash, а
+// кабинет руководителя (эта задача) требует, чтобы под rukovoditel можно
+// было войти -- иначе экран недостижим ни для кого. Логин/пароль сверяются
+// с users.passwordHash (bcrypt), а не с DEMO_PASSWORD.
+router.post('/login/user', async (req, res, next) => {
+  try {
+    const username = String(req.body.username || '').trim();
+    const password = String(req.body.password || '');
+    const user = username ? await prisma.user.findUnique({ where: { username } }) : null;
+    const ok = user && user.isActive && (await bcrypt.compare(password, user.passwordHash));
+    if (!ok) {
+      const managers = await prisma.manager.findMany({ orderBy: { name: 'asc' } });
+      return res.status(401).render('login', { error: 'Неверный логин или пароль', managers });
+    }
+    const token = signSession(user);
+    res.cookie(COOKIE_NAME, token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: req.protocol === 'https',
+      maxAge: 12 * 60 * 60 * 1000,
+    });
+    res.redirect('/');
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/login', async (req, res, next) => {
   try {
     const { managerId, password } = req.body;

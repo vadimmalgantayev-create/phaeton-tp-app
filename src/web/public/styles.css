@@ -189,6 +189,18 @@ html, body {
   margin-left: 6px;
 }
 
+.distance-ok {
+  font-size: 14px;
+  font-weight: 700;
+  color: #4fd18b;
+}
+
+.distance-far {
+  font-size: 14px;
+  font-weight: 700;
+  color: #f0765c;
+}
+
 .form {
   display: flex;
   flex-direction: column;

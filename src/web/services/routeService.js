@@ -1,6 +1,7 @@
 'use strict';
 
 const { PrismaClient } = require('@prisma/client');
+const { haversineMeters } = require('../../lib/geo');
 
 const prisma = new PrismaClient();
 
@@ -42,12 +43,33 @@ async function getTodayRoute(managerId) {
   });
 }
 
+// ТЗ PHA-81 ч.1: сохраняет отметку посещения + расстояние ТП-клиент.
+// hasGeo=false, если браузер не отдал координаты (запрет/недоступно) --
+// отметка (факт+время) всё равно сохраняется. distanceM считается только
+// если есть И гео ТП, И координаты клиента в базе -- иначе остаётся null
+// (не выдумываем расстояние).
 async function checkIn(managerId, clientId, latitude, longitude) {
   const day = startOfDay(new Date());
+  const hasGeo = latitude != null && longitude != null;
+
+  const client = await prisma.client.findUnique({
+    where: { id: clientId },
+    include: { addresses: true },
+  });
+  const primaryAddress = client ? client.addresses.find((a) => a.isPrimary) || client.addresses[0] : null;
+  const clientLat = primaryAddress ? primaryAddress.latitude : null;
+  const clientLng = primaryAddress ? primaryAddress.longitude : null;
+
+  const distanceM =
+    hasGeo && clientLat != null && clientLng != null
+      ? haversineMeters(latitude, longitude, clientLat, clientLng)
+      : null;
+
+  const data = { visitedAt: new Date(), latitude, longitude, hasGeo, distanceM, clientLat, clientLng };
   return prisma.routeVisit.upsert({
     where: { managerId_clientId_day: { managerId, clientId, day } },
-    update: { visitedAt: new Date(), latitude, longitude },
-    create: { managerId, clientId, day, visitedAt: new Date(), latitude, longitude },
+    update: data,
+    create: { managerId, clientId, day, ...data },
   });
 }
 

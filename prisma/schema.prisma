@@ -103,16 +103,32 @@ model OrderLine {
 }
 
 // ТЗ 6.9: маршрут на день + гео-чек-ин у клиента.
+//
+// PHA-81: расстояние ТП-клиент на момент отметки. ⚑ Допущение: ТЗ просило
+// отдельную сущность Visit(managerId, clientId, visitedAt, lat, lng, hasGeo,
+// distanceM, clientLat, clientLng) — здесь вместо неё расширена уже
+// существующая RouteVisit (ровно тот же набор полей + day для маршрута на
+// день), а не заведена вторая параллельная таблица с той же ролью. Причина:
+// RouteVisit уже хранит факт отметки (managerId+clientId+day, upsert —
+// одна отметка в день на клиента) и используется в /route и здесь; отдельная
+// Visit-таблица дублировала бы её без нового смысла. Если заказчику нужна
+// история НЕСКОЛЬКИХ отметок в день по одному клиенту — это отдельное
+// решение (снять @@unique), выходящее за рамки этой задачи, и его стоит
+// явно согласовать, а не подставлять молча.
 model RouteVisit {
-  id        Int       @id @default(autoincrement())
-  manager   Manager   @relation(fields: [managerId], references: [id])
-  managerId Int
-  client    Client    @relation(fields: [clientId], references: [id])
-  clientId  Int
-  day       DateTime  // start-of-day (UTC), one planned visit per client per day
-  visitedAt DateTime?
-  latitude  Float?
-  longitude Float?
+  id         Int       @id @default(autoincrement())
+  manager    Manager   @relation(fields: [managerId], references: [id])
+  managerId  Int
+  client     Client    @relation(fields: [clientId], references: [id])
+  clientId   Int
+  day        DateTime  // start-of-day (UTC), one planned visit per client per day
+  visitedAt  DateTime?
+  latitude   Float?    // ТП: координаты в момент отметки
+  longitude  Float?
+  hasGeo     Boolean   @default(false) // false = отметка без гео (запрет/недоступно), но факт+время сохранены
+  distanceM  Float?    // haversine(ТП, клиент) в метрах; null если нет гео ТП или координат клиента
+  clientLat  Float?    // координаты клиента на момент отметки (снимок, чтобы отчёт не "плыл" при переезде адреса)
+  clientLng  Float?
 
   @@unique([managerId, clientId, day])
   @@map("route_visits")
