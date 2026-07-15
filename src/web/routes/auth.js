@@ -10,10 +10,14 @@ const prisma = new PrismaClient();
 const router = express.Router();
 
 // Общий пароль для входа по выбору менеджера (ТП). Проверяется против
-// DEMO_PASSWORD, а не против таблицы users -- на Render база эфемерная
-// (пересоздаётся при каждом деплое) и users там пустая, seed:users в
-// buildCommand не запускается. Дефолт 123456 только если переменная не
-// задана вовсе.
+// DEMO_PASSWORD, а не против таблицы users -- ТП-пользователи создаются
+// лениво через upsert ниже (по managerId), а не сидом. Дефолт 123456 только
+// если переменная не задана вовсе.
+//
+// PHA-81 QA: admin/rukovoditel НЕ создаются лениво (нет managerId, не через
+// эту форму) -- их обязан завести `npm run seed:users`, который теперь есть
+// в render.yaml buildCommand (иначе на эфемерной БД Render кабинет
+// руководителя недостижим никем, включая владельца -- см. PHA-81 QA отчёт).
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD || '123456';
 
 router.get('/login', async (req, res, next) => {

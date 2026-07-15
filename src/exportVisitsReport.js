@@ -8,8 +8,14 @@ function formatDate(d) {
   return new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(d);
 }
 
+// PHA-81 QA: раньше время форматировалось в таймзоне процесса, а дата --
+// явно в UTC (см. formatDate) -- у границы суток дата и время в одной
+// строке могли относиться к разным календарным суткам и не совпадать ни с
+// UTC, ни с честным локальным временем визита. `day`/`visitedAt` в БД
+// оба привязаны к UTC-суткам (routeService.startOfDay), так что время тоже
+// должно быть в UTC, а не в TZ процесса Node (которая на Render не зафиксирована).
 function formatTime(d) {
-  return new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit' }).format(d);
+  return new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }).format(d);
 }
 
 // ТЗ PHA-81 ч.3: .xlsx собирается в памяти и отдаётся на скачивание --
