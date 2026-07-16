@@ -252,3 +252,61 @@ html, body {
 .nav a.active {
   color: #4fd18b;
 }
+
+.client-row-green {
+  border-left: 3px solid #4fd18b;
+  padding-left: 8px;
+}
+
+.client-row-orange {
+  border-left: 3px solid #f0b93c;
+  padding-left: 8px;
+}
+
+.client-row-red {
+  border-left: 3px solid #f0765c;
+  padding-left: 8px;
+}
+
+.client-fact-badge {
+  display: inline-block;
+  border-radius: 6px;
+  padding: 1px 8px;
+  font-weight: 700;
+}
+
+.client-fact-green {
+  background: rgba(79, 209, 139, 0.15);
+  color: #4fd18b;
+}
+
+.client-fact-orange {
+  background: rgba(240, 185, 60, 0.15);
+  color: #f0b93c;
+}
+
+.client-fact-red {
+  background: rgba(240, 118, 92, 0.15);
+  color: #f0765c;
+}
+
+.color-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.color-filter-btn {
+  color: #9a9fab;
+  text-decoration: none;
+  font-size: 13px;
+  background: #0f1115;
+  border: 1px solid #2a2e37;
+  border-radius: 999px;
+  padding: 6px 12px;
+}
+
+.color-filter-btn.active {
+  border-color: #4fd18b;
+  color: #e8e9ec;
+}

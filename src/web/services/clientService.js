@@ -6,46 +6,62 @@ const { getClientPlanFacts } = require('./clientPlanService');
 const prisma = new PrismaClient();
 const PAGE_SIZE = 30;
 
-async function listClients({ managerIds, q, page = 1 } = {}) {
+// PHA-83: цвет строго по факту закупа текущего месяца (EUR), не по % плана.
+function getFactColor(factEur) {
+  if (factEur > 100) return 'green';
+  if (factEur > 0) return 'orange';
+  return 'red';
+}
+
+async function listClients({ managerIds, q, page = 1, color = null } = {}) {
   const where = {};
   if (managerIds) where.managerId = { in: managerIds };
   if (q) {
     where.OR = [{ name: { contains: q } }, { code: { contains: q } }];
   }
 
-  const [total, clients, planFacts] = await Promise.all([
-    prisma.client.count({ where }),
+  const [clients, planFacts] = await Promise.all([
     prisma.client.findMany({
       where,
       include: { manager: true, debt: true, _count: { select: { missingInvoices: true } } },
-      orderBy: { name: 'asc' },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
     }),
     getClientPlanFacts(managerIds),
   ]);
 
+  const colored = clients.map((c) => {
+    const planEur = planFacts.planByClient.has(c.id) ? planFacts.planByClient.get(c.id) : null;
+    const factEur = planFacts.factByClient.get(c.id) || 0;
+    return {
+      id: c.id,
+      code: c.code,
+      name: c.name,
+      managerName: c.manager ? c.manager.name : null,
+      isOverdue: c.debt ? c.debt.isOverdue : false,
+      hasMissingInvoice: c._count.missingInvoices > 0,
+      planEur,
+      factEur,
+      percent: planEur ? Math.round((factEur / planEur) * 100) : null,
+      color: getFactColor(factEur),
+    };
+  });
+
+  // Сортировка по убыванию факта закупа (PHA-83 п.2) и фильтр по цвету (п.3)
+  // применяются до пагинации, т.к. цвет/факт считаются из planFacts, а не из
+  // самой БД-выборки клиентов.
+  const filtered = color ? colored.filter((c) => c.color === color) : colored;
+  filtered.sort((a, b) => b.factEur - a.factEur);
+
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const items = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   return {
-    items: clients.map((c) => {
-      const planEur = planFacts.planByClient.has(c.id) ? planFacts.planByClient.get(c.id) : null;
-      const factEur = planFacts.factByClient.get(c.id) || 0;
-      return {
-        id: c.id,
-        code: c.code,
-        name: c.name,
-        managerName: c.manager ? c.manager.name : null,
-        isOverdue: c.debt ? c.debt.isOverdue : false,
-        hasMissingInvoice: c._count.missingInvoices > 0,
-        planEur,
-        factEur,
-        percent: planEur ? Math.round((factEur / planEur) * 100) : null,
-      };
-    }),
+    items,
     month: planFacts.month,
     page,
     pageSize: PAGE_SIZE,
     total,
-    totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    totalPages,
   };
 }
 

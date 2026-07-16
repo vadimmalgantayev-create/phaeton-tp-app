@@ -6,12 +6,15 @@ const { visibleManagerIds } = require('../auth/scope');
 
 const router = express.Router();
 
+const COLOR_VALUES = ['green', 'orange', 'red'];
+
 router.get('/clients', async (req, res, next) => {
   try {
     const page = Math.max(1, Number(req.query.page) || 1);
     const q = (req.query.q || '').trim() || null;
-    const data = await listClients({ managerIds: visibleManagerIds(req.user), q, page });
-    res.render('clients', { ...data, q, user: req.user });
+    const color = COLOR_VALUES.includes(req.query.color) ? req.query.color : null;
+    const data = await listClients({ managerIds: visibleManagerIds(req.user), q, page, color });
+    res.render('clients', { ...data, q, color, user: req.user });
   } catch (err) {
     next(err);
   }
