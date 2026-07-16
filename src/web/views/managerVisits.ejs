@@ -24,12 +24,17 @@
         </select>
 
         <label class="form-label">Бизнес-регион</label>
-        <select class="form-input" name="regionId">
-          <option value="">Все регионы</option>
-          <% regions.forEach(function(r) { %>
-            <option value="<%= r.id %>" <%= filters.regionId === r.id ? 'selected' : '' %>><%= r.name %></option>
-          <% }) %>
-        </select>
+        <% if (user.role === 'RUKOVODITEL') { %>
+          <% var ownRegion = regions.find(function(r) { return r.id === filters.regionId; }); %>
+          <input class="form-input" type="text" value="<%= ownRegion ? ownRegion.name : 'регион не назначен' %>" disabled>
+        <% } else { %>
+          <select class="form-input" name="regionId">
+            <option value="">Все регионы</option>
+            <% regions.forEach(function(r) { %>
+              <option value="<%= r.id %>" <%= filters.regionId === r.id ? 'selected' : '' %>><%= r.name %></option>
+            <% }) %>
+          </select>
+        <% } %>
 
         <label class="form-label">ТП</label>
         <select class="form-input" name="managerId">

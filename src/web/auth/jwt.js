@@ -21,7 +21,7 @@ const EXPIRES_IN = '12h';
 
 function signSession(user) {
   return jwt.sign(
-    { sub: user.id, username: user.username, role: user.role, managerId: user.managerId },
+    { sub: user.id, username: user.username, role: user.role, managerId: user.managerId, regionId: user.regionId },
     JWT_SECRET,
     { expiresIn: EXPIRES_IN }
   );

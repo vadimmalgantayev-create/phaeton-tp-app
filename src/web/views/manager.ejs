@@ -12,8 +12,20 @@
     <%- include('partials/nav', { user }) %>
     <div class="header">
       <p class="eyebrow"><%= new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(month) %></p>
-      <h1>Кабинет руководителя</h1>
+      <h1>Кабинет руководителя<% if (user.role === 'RUKOVODITEL' && team.length && team[0].regionName) { %> · <%= team[0].regionName %><% } %></h1>
     </div>
+
+    <% if (noRegionAssigned) { %>
+      <div class="card">
+        <p class="attention-debt">Регион не назначен для вашей учётной записи -- данные не показаны. Обратитесь к администратору.</p>
+      </div>
+    <% } %>
+
+    <% if (clientsWithoutRegion) { %>
+      <div class="card">
+        <p class="empty-state">Клиентов без привязки к менеджеру (регион не определён): <%= clientsWithoutRegion %> -- не входят ни в один региональный кабинет</p>
+      </div>
+    <% } %>
 
     <div class="card">
       <h2>Товарооборот команды</h2>

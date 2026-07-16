@@ -8,21 +8,31 @@ function startOfMonth(date) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
 }
 
-// ТЗ 6.11 (базовый уровень MVP): сводный план/факт по команде + ДЗ по
-// региону. RUKOVODITEL/ADMIN видят весь портфель (см. допущение в scope.js
-// про отсутствие региона у пользователя-руководителя).
-async function getManagerDashboard() {
+// ТЗ 6.11 (базовый уровень MVP) + PHA-82: сводный план/факт по команде + ДЗ
+// по региону. regionId === null -> без фильтра (ADMIN, весь портфель);
+// regionId задан -> только ТП этого региона (RUKOVODITEL, см. scope.js).
+async function getManagerDashboard(regionId = null) {
   const month = startOfMonth(new Date());
 
-  const managers = await prisma.manager.findMany({ include: { region: true }, orderBy: { name: 'asc' } });
+  const managers = await prisma.manager.findMany({
+    where: regionId != null ? { regionId } : {},
+    include: { region: true },
+    orderBy: { name: 'asc' },
+  });
+  const managerIds = managers.map((m) => m.id);
 
-  const [revenueByManager, plansByManager, debtsByRegion] = await Promise.all([
-    prisma.salesFact.groupBy({ by: ['managerId'], where: { month }, _sum: { revenueEur: true } }),
-    prisma.plan.findMany({ where: { taskType: 'TOTAL' } }),
+  const [revenueByManager, plansByManager, debtsByRegion, clientsWithoutRegion] = await Promise.all([
+    prisma.salesFact.groupBy({ by: ['managerId'], where: { month, managerId: { in: managerIds } }, _sum: { revenueEur: true } }),
+    prisma.plan.findMany({ where: { taskType: 'TOTAL', managerId: { in: managerIds } } }),
     prisma.debt.findMany({
-      where: { isOverdue: true },
+      where: { isOverdue: true, client: { managerId: { in: managerIds } } },
       include: { client: { include: { manager: { include: { region: true } } } } },
     }),
+    // ТЗ PHA-82 "не терять молча": клиенты без менеджера (а значит и без
+    // региона) не попадают ни в один region-scoped кабинет руководителя --
+    // показываем счётчик в общем (нефильтрованном, т.е. ADMIN) виде, а не
+    // прячем факт их существования.
+    regionId == null ? prisma.client.count({ where: { managerId: null } }) : Promise.resolve(null),
   ]);
 
   const revenueMap = new Map(revenueByManager.map((r) => [r.managerId, r._sum.revenueEur || 0]));
@@ -60,6 +70,7 @@ async function getManagerDashboard() {
     team,
     teamTotals,
     regionDebt: Array.from(regionDebt.entries()).map(([regionName, total]) => ({ regionName, total })),
+    clientsWithoutRegion,
   };
 }
 

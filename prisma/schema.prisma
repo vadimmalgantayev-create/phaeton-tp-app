@@ -23,6 +23,7 @@ model Region {
   name      String    @unique
   managers  Manager[]
   discounts Discount[]
+  users     User[]
 
   @@map("regions")
 }
@@ -45,8 +46,9 @@ model Manager {
 }
 
 // Логин/роль (ТЗ 6.1). ТП привязан к конкретному Manager (данные каталога/
-// дашборда скоупятся по managerId); Руководитель/Администратор — без
-// привязки, видят данные по региону/всей компании (см. rbac.js).
+// дашборда скоупятся по managerId); Руководитель привязан к Region (см.
+// PHA-82, scope.js) -- данные кабинета руководителя скоупятся по regionId;
+// Администратор — без привязки, видит всё.
 model User {
   id           Int      @id @default(autoincrement())
   username     String   @unique
@@ -55,6 +57,8 @@ model User {
   isActive     Boolean  @default(true)
   manager      Manager? @relation(fields: [managerId], references: [id])
   managerId    Int?     @unique
+  region       Region?  @relation(fields: [regionId], references: [id])
+  regionId     Int?     @unique
   createdAt    DateTime @default(now())
   notes        Note[]
   orders       Order[]

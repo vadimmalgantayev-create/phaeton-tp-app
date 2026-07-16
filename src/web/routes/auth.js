@@ -20,23 +20,34 @@ const router = express.Router();
 // руководителя недостижим никем, включая владельца -- см. PHA-81 QA отчёт).
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD || '123456';
 
+// Общие для формы входа списки (менеджеры для ТП, регионы для руководителя).
+async function loginFormOptions() {
+  const [managers, regions] = await Promise.all([
+    prisma.manager.findMany({ orderBy: { name: 'asc' } }),
+    prisma.region.findMany({ orderBy: { name: 'asc' } }),
+  ]);
+  return { managers, regions };
+}
+
 router.get('/login', async (req, res, next) => {
   try {
     if (req.user) return res.redirect('/');
-    const managers = await prisma.manager.findMany({ orderBy: { name: 'asc' } });
-    res.render('login', { error: null, managers });
+    const options = await loginFormOptions();
+    res.render('login', { error: null, ...options });
   } catch (err) {
     next(err);
   }
 });
 
-// PHA-81: до этой задачи RUKOVODITEL/ADMIN не могли войти вообще -- форма
-// поддерживала только выбор менеджера + DEMO_PASSWORD (всегда вход как TP,
-// см. комментарий ниже про ТЗ "роли руководитель/админ -- позже"). Но
-// seedUsers.js уже создаёт rukovoditel/admin с реальным passwordHash, а
-// кабинет руководителя (эта задача) требует, чтобы под rukovoditel можно
-// было войти -- иначе экран недостижим ни для кого. Логин/пароль сверяются
-// с users.passwordHash (bcrypt), а не с DEMO_PASSWORD.
+// PHA-81: до этой задачи RUKOVODITEL/ADMIN не могли войти вообще. seedUsers.js
+// создаёт rukovoditel/admin с реальным passwordHash -- оставлено как вход
+// АДМИНИСТРАТОРА по логину/паролю (users.passwordHash, bcrypt). Для
+// руководителя этот путь заменён на /login/region (PHA-82, см. ниже) --
+// seedUsers-аккаунт rukovoditel не создаётся лениво и пропадает на эфемерной
+// БД Render (см. PHA-82 ТЗ), поэтому руководителю нужен вход, не зависящий
+// от сида. Роль явно не проверяется здесь: строка users с ролью RUKOVODITEL,
+// заведённая вручную через /admin/users, тоже может войти этим путём -- это
+// сознательно оставлено как запасной путь для админ-заведённых аккаунтов.
 router.post('/login/user', async (req, res, next) => {
   try {
     const username = String(req.body.username || '').trim();
@@ -44,9 +55,54 @@ router.post('/login/user', async (req, res, next) => {
     const user = username ? await prisma.user.findUnique({ where: { username } }) : null;
     const ok = user && user.isActive && (await bcrypt.compare(password, user.passwordHash));
     if (!ok) {
-      const managers = await prisma.manager.findMany({ orderBy: { name: 'asc' } });
-      return res.status(401).render('login', { error: 'Неверный логин или пароль', managers });
+      const options = await loginFormOptions();
+      return res.status(401).render('login', { error: 'Неверный логин или пароль', ...options });
     }
+    const token = signSession(user);
+    res.cookie(COOKIE_NAME, token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: req.protocol === 'https',
+      maxAge: 12 * 60 * 60 * 1000,
+    });
+    res.redirect('/');
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PHA-82: вход руководителя -- выбор бизнес-региона (distinct список из
+// regions, т.е. из данных, а не хардкод) + общий пароль DEMO_PASSWORD (та же
+// переменная, что у ТП -- см. ТЗ "на твоё усмотрение", отдельная переменная
+// не заводится, чтобы не плодить новых обязательных env на Render). Пароль
+// проверяется НЕ против users.passwordHash, а против DEMO_PASSWORD -- ровно
+// по той же причине, что и вход ТП: users пустая на эфемерной БД Render, а
+// сид (seedUsers) переживает только билд, но не рестарт эфемерного диска
+// (см. ТЗ PHA-82). Под выбранный регион здесь лениво get-or-create'ится
+// настоящая строка User (регион кладётся в сессию через regionId, не как
+// отдельная таблица "выбор" -- см. jwt.js), а не подставляется region.id
+// вместо user.id.
+router.post('/login/region', async (req, res, next) => {
+  try {
+    const { regionId, password } = req.body;
+    const options = await loginFormOptions();
+    const regionIdNum = Number(regionId);
+    const region = Number.isInteger(regionIdNum)
+      ? await prisma.region.findUnique({ where: { id: regionIdNum } })
+      : null;
+    if (!region || String(password || '') !== DEMO_PASSWORD) {
+      return res.status(401).render('login', { error: 'Неверный регион или пароль', ...options });
+    }
+    const user = await prisma.user.upsert({
+      where: { regionId: region.id },
+      update: {},
+      create: {
+        username: `rukovoditel-region-${region.id}`,
+        role: 'RUKOVODITEL',
+        regionId: region.id,
+        passwordHash: await bcrypt.hash(DEMO_PASSWORD, 10),
+      },
+    });
     const token = signSession(user);
     res.cookie(COOKIE_NAME, token, {
       httpOnly: true,
@@ -63,13 +119,13 @@ router.post('/login/user', async (req, res, next) => {
 router.post('/login', async (req, res, next) => {
   try {
     const { managerId, password } = req.body;
-    const managers = await prisma.manager.findMany({ orderBy: { name: 'asc' } });
+    const options = await loginFormOptions();
     const managerIdNum = Number(managerId);
     const manager = Number.isInteger(managerIdNum)
       ? await prisma.manager.findUnique({ where: { id: managerIdNum } })
       : null;
     if (!manager || String(password || '') !== DEMO_PASSWORD) {
-      return res.status(401).render('login', { error: 'Неверный менеджер или пароль', managers });
+      return res.status(401).render('login', { error: 'Неверный менеджер или пароль', ...options });
     }
     // Вход всегда как TP (ТЗ: роли руководитель/админ -- позже). users
     // пустая на эфемерной БД, поэтому под каждого менеджера здесь
