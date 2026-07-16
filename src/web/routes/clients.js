@@ -3,12 +3,22 @@
 const express = require('express');
 const { listClients, getClientDetail, addNote } = require('../services/clientService');
 const { visibleManagerIds } = require('../auth/scope');
+const { requireRole } = require('../auth/middleware');
 
 const router = express.Router();
 
 const COLOR_VALUES = ['green', 'orange', 'red'];
 
-router.get('/clients', async (req, res, next) => {
+// QA PHA-83: список /clients существует только для ТП (нет пункта меню и
+// экрана под RUKOVODITEL/ADMIN -- см. partials/nav.ejs), но раньше не имел
+// проверки роли на сервере. listClients грузит в память весь набор клиентов
+// под `where` (не постранично из БД -- цвет/сортировка считаются из
+// planFacts, не из колонки БД), а для RUKOVODITEL/ADMIN visibleManagerIds()
+// возвращает null (без фильтра по менеджеру) -- то есть весь портфель
+// компании (5488+ клиентов на реальных данных) на каждый запрос. requireRole
+// закрывает доступ по URL для этих ролей вместо того, чтобы городить
+// отдельную DB-агрегацию ради экрана, которым они не пользуются.
+router.get('/clients', requireRole('TP'), async (req, res, next) => {
   try {
     const page = Math.max(1, Number(req.query.page) || 1);
     const q = (req.query.q || '').trim() || null;

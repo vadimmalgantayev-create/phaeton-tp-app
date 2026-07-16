@@ -25,9 +25,9 @@
       </form>
       <div class="color-filter" style="margin-top:10px">
         <a class="color-filter-btn<%= !color ? ' active' : '' %>" href="?<%= qParam %>">Все</a>
-        <a class="color-filter-btn<%= color === 'green' ? ' active' : '' %>" href="?<%= qParam %>color=green">🟢 Зелёные</a>
-        <a class="color-filter-btn<%= color === 'orange' ? ' active' : '' %>" href="?<%= qParam %>color=orange">🟠 Оранжевые</a>
-        <a class="color-filter-btn<%= color === 'red' ? ' active' : '' %>" href="?<%= qParam %>color=red">🔴 Красные</a>
+        <a class="color-filter-btn color-filter-btn-green<%= color === 'green' ? ' active' : '' %>" href="?<%= qParam %>color=green">🟢 Зелёные</a>
+        <a class="color-filter-btn color-filter-btn-orange<%= color === 'orange' ? ' active' : '' %>" href="?<%= qParam %>color=orange">🟠 Оранжевые</a>
+        <a class="color-filter-btn color-filter-btn-red<%= color === 'red' ? ' active' : '' %>" href="?<%= qParam %>color=red">🔴 Красные</a>
       </div>
       <p class="empty-state" style="margin-top:10px">
         План клиента = доля клиента в продажах менеджера (EUR) за последние 4 месяца × общий план менеджера на текущий месяц.

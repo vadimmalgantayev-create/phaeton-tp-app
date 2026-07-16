@@ -310,3 +310,11 @@ html, body {
   border-color: #4fd18b;
   color: #e8e9ec;
 }
+
+.color-filter-btn-orange.active {
+  border-color: #f0b93c;
+}
+
+.color-filter-btn-red.active {
+  border-color: #f0765c;
+}

@@ -31,7 +31,11 @@ async function listClients({ managerIds, q, page = 1, color = null } = {}) {
 
   const colored = clients.map((c) => {
     const planEur = planFacts.planByClient.has(c.id) ? planFacts.planByClient.get(c.id) : null;
-    const factEur = planFacts.factByClient.get(c.id) || 0;
+    // QA PHA-83: чистый возврат (сумма revenueEur за месяц отрицательна) --
+    // это business-эквивалент "не закупал", а не отрицательная сумма. Клэмп
+    // до 0 здесь, а не только в шаблоне, чтобы бейдж, цвет и % от плана были
+    // согласованы (иначе бейдж показал бы "0 EUR", а % плана -- отрицательным).
+    const factEur = Math.max(0, planFacts.factByClient.get(c.id) || 0);
     return {
       id: c.id,
       code: c.code,
