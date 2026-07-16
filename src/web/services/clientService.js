@@ -2,6 +2,7 @@
 
 const { PrismaClient } = require('@prisma/client');
 const { getClientPlanFacts } = require('./clientPlanService');
+const { OIL_BRANDS } = require('./taskBrandMapping');
 
 const prisma = new PrismaClient();
 const PAGE_SIZE = 30;
@@ -111,12 +112,24 @@ async function getClientDetail(clientId) {
     .sort((a, b) => Number(a.isExpired) - Number(b.isExpired));
 
   const currentYear = new Date().getFullYear();
-  const salesHistory = await prisma.salesFact.findMany({
+  const salesHistoryRaw = await prisma.salesFact.findMany({
     where: {
       clientId,
       month: { gte: new Date(Date.UTC(currentYear, 0, 1)), lt: new Date(Date.UTC(currentYear + 1, 0, 1)) },
     },
     orderBy: { month: 'desc' },
+  });
+
+  // PHA-84: масляные бренды (FUCHS, MaxPro1, AFINOL — тот же список, что и
+  // задача "Масло" в taskBrandMapping.js) считаются в литрах, т.к. премия по
+  // маслу считается по объёму, а не по обороту. Остальные бренды -- в EUR.
+  const salesHistory = salesHistoryRaw.map((s) => {
+    const isOil = OIL_BRANDS.includes(s.brand);
+    return {
+      ...s,
+      amount: isOil ? s.volumeL : s.revenueEur,
+      unit: isOil ? 'л' : 'EUR',
+    };
   });
 
   return { client, salesHistory };
