@@ -318,3 +318,44 @@ html, body {
 .color-filter-btn-red.active {
   border-color: #f0765c;
 }
+
+/* PHA-85: экран "Заметки" по клиенту */
+.note-text {
+  margin: 6px 0 2px;
+  white-space: pre-wrap;
+}
+
+.note-tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 2px 8px;
+  margin-right: 6px;
+}
+
+.note-tag-debt {
+  background: rgba(240, 118, 92, 0.15);
+  color: #f0765c;
+}
+
+.note-tag-agreement {
+  background: rgba(79, 209, 139, 0.15);
+  color: #4fd18b;
+}
+
+.note-tag-showcase {
+  background: rgba(124, 147, 240, 0.15);
+  color: #7c93f0;
+}
+
+.note-pinned {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #f0b93c;
+  border: 1px solid #f0b93c;
+  border-radius: 6px;
+  padding: 1px 6px;
+  margin-right: 6px;
+}

@@ -7,6 +7,10 @@ const { OIL_BRANDS } = require('./taskBrandMapping');
 const prisma = new PrismaClient();
 const PAGE_SIZE = 30;
 
+// PHA-85: фиксированный набор меток заметки -- строго эти три, не выдумывать
+// новые (см. ТЗ задачи). Порядок здесь -- порядок в select на форме.
+const NOTE_TAGS = ['Задолженность', 'Договорённость', 'Витрина'];
+
 // PHA-83: цвет строго по факту закупа текущего месяца (EUR), не по % плана.
 function getFactColor(factEur) {
   if (factEur > 100) return 'green';
@@ -98,7 +102,6 @@ async function getClientDetail(clientId) {
       discounts: true,
       debt: true,
       missingInvoices: true,
-      notes: { include: { author: true }, orderBy: { createdAt: 'desc' } },
     },
   });
   if (!client) return null;
@@ -139,8 +142,36 @@ async function getClientDetail(clientId) {
   return { client, salesHistory };
 }
 
-async function addNote(clientId, authorId, text) {
-  return prisma.note.create({ data: { clientId, authorId, text } });
+// Лёгкая выборка клиента без тяжёлых include -- для заголовка экрана заметок
+// и для проверки прав доступа (managerId), без загрузки скидок/ДЗ/истории.
+async function getClientBasic(clientId) {
+  return prisma.client.findUnique({
+    where: { id: clientId },
+    select: { id: true, name: true, code: true, managerId: true },
+  });
 }
 
-module.exports = { listClients, getClientDetail, addNote };
+// PHA-85 п.2: закреплённые -- сверху (с пометкой "закреплено"), затем по
+// дате создания (новые сверху). SQLite сортирует boolean как 0/1, поэтому
+// pinned: 'desc' кладёт pinned=true (1) перед pinned=false (0).
+async function getClientNotes(clientId) {
+  return prisma.note.findMany({
+    where: { clientId },
+    include: { author: true },
+    orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }],
+  });
+}
+
+async function addNote(clientId, authorId, text, tag, pinned) {
+  return prisma.note.create({
+    data: {
+      clientId,
+      authorId,
+      text,
+      tag: NOTE_TAGS.includes(tag) ? tag : null,
+      pinned: !!pinned,
+    },
+  });
+}
+
+module.exports = { listClients, getClientDetail, getClientBasic, getClientNotes, addNote, NOTE_TAGS };

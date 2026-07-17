@@ -27,6 +27,7 @@
         </p>
       <% }) %>
       <a class="weight-badge" href="/orders/new?clientId=<%= client.id %>">Оформить заказ</a>
+      <a class="weight-badge" href="/clients/<%= client.id %>/notes">Заметки</a>
     </div>
 
     <div class="card">
@@ -70,22 +71,6 @@
           </div>
         <% }) %>
       <% } %>
-    </div>
-
-    <div class="card">
-      <h2>Заметки</h2>
-      <form method="post" action="/clients/<%= client.id %>/notes" class="form">
-        <textarea class="form-input" name="text" rows="2" placeholder="Новая заметка" required></textarea>
-        <button class="form-button" type="submit">Добавить</button>
-      </form>
-      <% client.notes.forEach(function(n) { %>
-        <div class="task-row">
-          <div class="task-name">
-            <%= n.text %>
-            <span class="task-target"><%= n.author.username %> · <%= new Intl.DateTimeFormat('ru-RU').format(n.createdAt) %></span>
-          </div>
-        </div>
-      <% }) %>
     </div>
   </div>
 </body>

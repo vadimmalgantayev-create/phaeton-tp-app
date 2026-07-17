@@ -66,6 +66,9 @@ model User {
   @@map("users")
 }
 
+// PHA-85: экран "Заметки" по клиенту. tag — метка из фиксированного набора
+// (см. NOTE_TAGS в clientService.js), pinned — закреплённые заметки идут
+// первыми в списке.
 model Note {
   id        Int      @id @default(autoincrement())
   client    Client   @relation(fields: [clientId], references: [id])
@@ -73,6 +76,8 @@ model Note {
   author    User     @relation(fields: [authorId], references: [id])
   authorId  Int
   text      String
+  tag       String?
+  pinned    Boolean  @default(false)
   createdAt DateTime @default(now())
 
   @@map("notes")

@@ -1,7 +1,7 @@
 'use strict';
 
 const express = require('express');
-const { listClients, getClientDetail, addNote } = require('../services/clientService');
+const { listClients, getClientDetail, getClientBasic, getClientNotes, addNote, NOTE_TAGS } = require('../services/clientService');
 const { visibleManagerIds } = require('../auth/scope');
 const { requireRole } = require('../auth/middleware');
 
@@ -47,20 +47,43 @@ router.get('/clients/:id', async (req, res, next) => {
   }
 });
 
+// PHA-85: доступ к заметкам клиента -- та же проверка видимости, что и на
+// карточке клиента (ТП видит только своих клиентов, RUKOVODITEL/ADMIN -- по
+// своему скоупу через visibleManagerIds).
+async function checkClientAccess(req, clientId) {
+  const client = await getClientBasic(clientId);
+  if (!client) return { client: null, forbidden: false };
+  const managerIds = visibleManagerIds(req.user);
+  const forbidden = !!(managerIds && !managerIds.includes(client.managerId));
+  return { client, forbidden };
+}
+
+router.get('/clients/:id/notes', async (req, res, next) => {
+  try {
+    const clientId = Number(req.params.id);
+    const { client, forbidden } = await checkClientAccess(req, clientId);
+    if (!client) return res.status(404).send('Клиент не найден');
+    if (forbidden) return res.status(403).send('Недостаточно прав для просмотра этого клиента');
+
+    const notes = await getClientNotes(clientId);
+    res.render('clientNotes', { client, notes, noteTags: NOTE_TAGS, user: req.user });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/clients/:id/notes', async (req, res, next) => {
   try {
     const clientId = Number(req.params.id);
-    const data = await getClientDetail(clientId);
-    if (!data) return res.status(404).send('Клиент не найден');
-
-    const managerIds = visibleManagerIds(req.user);
-    if (managerIds && !managerIds.includes(data.client.managerId)) {
-      return res.status(403).send('Недостаточно прав для просмотра этого клиента');
-    }
+    const { client, forbidden } = await checkClientAccess(req, clientId);
+    if (!client) return res.status(404).send('Клиент не найден');
+    if (forbidden) return res.status(403).send('Недостаточно прав для просмотра этого клиента');
 
     const text = (req.body.text || '').trim();
-    if (text) await addNote(clientId, req.user.sub, text);
-    res.redirect(`/clients/${clientId}`);
+    const tag = req.body.tag;
+    const pinned = req.body.pinned === '1';
+    if (text) await addNote(clientId, req.user.sub, text, tag, pinned);
+    res.redirect(`/clients/${clientId}/notes`);
   } catch (err) {
     next(err);
   }

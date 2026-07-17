@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Заметки — <%= client.name %> — Phaeton ТП</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+</head>
+<body>
+  <div class="screen">
+    <%- include('partials/nav', { user }) %>
+    <div class="header">
+      <p class="eyebrow"><%= client.code || client.name %></p>
+      <h1>Заметки — <%= client.name %></h1>
+    </div>
+
+    <div class="card">
+      <h2>+ Новая заметка</h2>
+      <form method="post" action="/clients/<%= client.id %>/notes" class="form">
+        <textarea class="form-input" name="text" rows="3" placeholder="Текст заметки" required></textarea>
+        <label class="form-label" for="note-tag">Метка</label>
+        <select class="form-input" id="note-tag" name="tag" required>
+          <% noteTags.forEach(function(t) { %>
+            <option value="<%= t %>"><%= t %></option>
+          <% }) %>
+        </select>
+        <label class="form-label">
+          <input type="checkbox" name="pinned" value="1"> Закрепить
+        </label>
+        <button class="form-button" type="submit">Добавить</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Список заметок</h2>
+      <% if (notes.length === 0) { %>
+        <p class="empty-state">Заметок пока нет</p>
+      <% } %>
+      <% notes.forEach(function(n) { %>
+        <div class="task-row">
+          <div class="task-name">
+            <% if (n.pinned) { %><span class="note-pinned">закреплено</span><% } %>
+            <% if (n.tag) { %><span class="note-tag note-tag-<%= n.tag === 'Задолженность' ? 'debt' : (n.tag === 'Договорённость' ? 'agreement' : 'showcase') %>"><%= n.tag %></span><% } %>
+            <p class="note-text"><%= n.text %></p>
+            <span class="task-target"><%= n.author.username %> · <%= new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(n.createdAt) %></span>
+          </div>
+        </div>
+      <% }) %>
+    </div>
+  </div>
+</body>
+</html>
