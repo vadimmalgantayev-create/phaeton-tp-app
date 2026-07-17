@@ -174,4 +174,13 @@ async function addNote(clientId, authorId, text, tag, pinned) {
   });
 }
 
-module.exports = { listClients, getClientDetail, getClientBasic, getClientNotes, addNote, NOTE_TAGS };
+// PHA-86: удаление не привязано к автору -- право проверяется на уровне
+// роута через checkClientAccess (клиент относится к менеджеру), а не здесь.
+// `clientId` в where -- защита от удаления чужой заметки по id, если noteId
+// подобран/подставлен для другого клиента.
+async function deleteNote(clientId, noteId) {
+  const result = await prisma.note.deleteMany({ where: { id: noteId, clientId } });
+  return result.count > 0;
+}
+
+module.exports = { listClients, getClientDetail, getClientBasic, getClientNotes, addNote, deleteNote, NOTE_TAGS };

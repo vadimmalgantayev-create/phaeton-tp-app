@@ -349,6 +349,18 @@ html, body {
   color: #7c93f0;
 }
 
+.note-delete-btn {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid #2a2e37;
+  border-radius: 8px;
+  color: #f0765c;
+  font-size: 16px;
+  line-height: 1;
+  padding: 8px 10px;
+  margin-left: 8px;
+}
+
 .note-pinned {
   display: inline-block;
   font-size: 11px;

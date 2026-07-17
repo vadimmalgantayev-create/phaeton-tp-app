@@ -1,7 +1,7 @@
 'use strict';
 
 const express = require('express');
-const { listClients, getClientDetail, getClientBasic, getClientNotes, addNote, NOTE_TAGS } = require('../services/clientService');
+const { listClients, getClientDetail, getClientBasic, getClientNotes, addNote, deleteNote, NOTE_TAGS } = require('../services/clientService');
 const { visibleManagerIds } = require('../auth/scope');
 const { requireRole } = require('../auth/middleware');
 
@@ -83,6 +83,26 @@ router.post('/clients/:id/notes', async (req, res, next) => {
     const tag = req.body.tag;
     const pinned = req.body.pinned === '1';
     if (text) await addNote(clientId, req.user.sub, text, tag, pinned);
+    res.redirect(`/clients/${clientId}/notes`);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PHA-86: право на удаление -- та же проверка видимости клиента, что и на
+// чтение/создание заметок (ТП -- только свои клиенты, RUKOVODITEL/ADMIN --
+// без ограничения по менеджеру). Не привязано к автору заметки: ТП должен
+// уметь удалить заметку по своему клиенту, даже если технически её создал
+// другой аккаунт.
+router.post('/clients/:id/notes/:noteId/delete', async (req, res, next) => {
+  try {
+    const clientId = Number(req.params.id);
+    const noteId = Number(req.params.noteId);
+    const { client, forbidden } = await checkClientAccess(req, clientId);
+    if (!client) return res.status(404).send('Клиент не найден');
+    if (forbidden) return res.status(403).send('Недостаточно прав для просмотра этого клиента');
+
+    await deleteNote(clientId, noteId);
     res.redirect(`/clients/${clientId}/notes`);
   } catch (err) {
     next(err);
