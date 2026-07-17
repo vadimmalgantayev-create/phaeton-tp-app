@@ -43,7 +43,7 @@
             <% if (n.pinned) { %><span class="note-pinned">закреплено</span><% } %>
             <% if (n.tag) { %><span class="note-tag note-tag-<%= n.tag === 'Задолженность' ? 'debt' : (n.tag === 'Договорённость' ? 'agreement' : 'showcase') %>"><%= n.tag %></span><% } %>
             <p class="note-text"><%= n.text %></p>
-            <span class="task-target"><%= n.author.username %> · <%= new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(n.createdAt) %></span>
+            <span class="task-target"><%= n.author.manager ? n.author.manager.name : n.author.username %> · <%= new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(n.createdAt) %></span>
           </div>
           <form method="post" action="/clients/<%= client.id %>/notes/<%= n.id %>/delete" onsubmit="return confirm('Удалить заметку?')">
             <button class="note-delete-btn" type="submit" aria-label="Удалить заметку" title="Удалить заметку">🗑</button>

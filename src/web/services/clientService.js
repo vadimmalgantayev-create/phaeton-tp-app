@@ -154,10 +154,15 @@ async function getClientBasic(clientId) {
 // PHA-85 п.2: закреплённые -- сверху (с пометкой "закреплено"), затем по
 // дате создания (новые сверху). SQLite сортирует boolean как 0/1, поэтому
 // pinned: 'desc' кладёт pinned=true (1) перед pinned=false (0).
+//
+// QA PHA-85: author.manager подтягивается вложенно, чтобы шаблон мог
+// показать имя менеджера, а не технический username (author.manager
+// пусто для RUKOVODITEL/ADMIN -- у них его и нет; шаблон делает фолбэк
+// на username для этого случая).
 async function getClientNotes(clientId) {
   return prisma.note.findMany({
     where: { clientId },
-    include: { author: true },
+    include: { author: { include: { manager: true } } },
     orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }],
   });
 }
