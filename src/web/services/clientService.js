@@ -151,9 +151,11 @@ async function getClientBasic(clientId) {
   });
 }
 
-// PHA-85 п.2: закреплённые -- сверху (с пометкой "закреплено"), затем по
-// дате создания (новые сверху). SQLite сортирует boolean как 0/1, поэтому
-// pinned: 'desc' кладёт pinned=true (1) перед pinned=false (0).
+// PHA-85 п.2 / PHA-87 п.4: невыполненные -- сверху, выполненные -- вниз (вне
+// зависимости от pinned/даты), внутри каждой группы -- закреплённые сверху,
+// затем по дате создания (новые сверху). SQLite сортирует boolean как 0/1,
+// поэтому 'desc' кладёт true (1) перед false (0); done сортируется по
+// возрастанию (false=0 перед true=1), чтобы невыполненные шли первыми.
 //
 // QA PHA-85: author.manager подтягивается вложенно, чтобы шаблон мог
 // показать имя менеджера, а не технический username (author.manager
@@ -163,7 +165,7 @@ async function getClientNotes(clientId) {
   return prisma.note.findMany({
     where: { clientId },
     include: { author: { include: { manager: true } } },
-    orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }],
+    orderBy: [{ done: 'asc' }, { pinned: 'desc' }, { createdAt: 'desc' }],
   });
 }
 
@@ -188,4 +190,13 @@ async function deleteNote(clientId, noteId) {
   return result.count > 0;
 }
 
-module.exports = { listClients, getClientDetail, getClientBasic, getClientNotes, addNote, deleteNote, NOTE_TAGS };
+// PHA-87: право на переключение "выполнено" -- то же самое, что и на
+// удаление (проверяется на уровне роута через checkClientAccess), не
+// привязано к автору заметки. `clientId` в where -- та же защита от
+// подмены noteId чужого клиента, что и в deleteNote.
+async function setNoteDone(clientId, noteId, done) {
+  const result = await prisma.note.updateMany({ where: { id: noteId, clientId }, data: { done } });
+  return result.count > 0;
+}
+
+module.exports = { listClients, getClientDetail, getClientBasic, getClientNotes, addNote, deleteNote, setNoteDone, NOTE_TAGS };

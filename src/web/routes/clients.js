@@ -1,7 +1,7 @@
 'use strict';
 
 const express = require('express');
-const { listClients, getClientDetail, getClientBasic, getClientNotes, addNote, deleteNote, NOTE_TAGS } = require('../services/clientService');
+const { listClients, getClientDetail, getClientBasic, getClientNotes, addNote, deleteNote, setNoteDone, NOTE_TAGS } = require('../services/clientService');
 const { visibleManagerIds } = require('../auth/scope');
 const { requireRole } = require('../auth/middleware');
 
@@ -103,6 +103,25 @@ router.post('/clients/:id/notes/:noteId/delete', async (req, res, next) => {
     if (forbidden) return res.status(403).send('Недостаточно прав для просмотра этого клиента');
 
     await deleteNote(clientId, noteId);
+    res.redirect(`/clients/${clientId}/notes`);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PHA-87: право на отметку "выполнено" -- та же проверка видимости клиента,
+// что и на удаление заметки (см. checkClientAccess выше и комментарий
+// PHA-86), не привязано к автору заметки.
+router.post('/clients/:id/notes/:noteId/done', async (req, res, next) => {
+  try {
+    const clientId = Number(req.params.id);
+    const noteId = Number(req.params.noteId);
+    const { client, forbidden } = await checkClientAccess(req, clientId);
+    if (!client) return res.status(404).send('Клиент не найден');
+    if (forbidden) return res.status(403).send('Недостаточно прав для просмотра этого клиента');
+
+    const done = req.body.done === '1';
+    await setNoteDone(clientId, noteId, done);
     res.redirect(`/clients/${clientId}/notes`);
   } catch (err) {
     next(err);

@@ -78,6 +78,7 @@ model Note {
   text      String
   tag       String?
   pinned    Boolean  @default(false)
+  done      Boolean  @default(false)
   createdAt DateTime @default(now())
 
   @@map("notes")

@@ -38,7 +38,11 @@
         <p class="empty-state">Заметок пока нет</p>
       <% } %>
       <% notes.forEach(function(n) { %>
-        <div class="task-row">
+        <div class="task-row<%= n.done ? ' note-done' : '' %>">
+          <form method="post" action="/clients/<%= client.id %>/notes/<%= n.id %>/done" class="note-done-form">
+            <input type="hidden" name="done" value="<%= n.done ? '0' : '1' %>">
+            <button class="note-done-btn" type="submit" aria-label="<%= n.done ? 'Снять отметку о выполнении' : 'Отметить выполненной' %>" title="<%= n.done ? 'Снять отметку о выполнении' : 'Отметить выполненной' %>"><%= n.done ? '↺' : '✓' %></button>
+          </form>
           <div class="task-name">
             <% if (n.pinned) { %><span class="note-pinned">закреплено</span><% } %>
             <% if (n.tag) { %><span class="note-tag note-tag-<%= n.tag === 'Задолженность' ? 'debt' : (n.tag === 'Договорённость' ? 'agreement' : 'showcase') %>"><%= n.tag %></span><% } %>
