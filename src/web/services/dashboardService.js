@@ -16,7 +16,7 @@ async function getDashboardData(managerId) {
   const manager = await prisma.manager.findUnique({ where: { id: managerId } });
 
   const [revenueAgg, totalPlan, weightedTasks, acbPlan, overdueDebts, missingInvoices] = await Promise.all([
-    prisma.salesFact.aggregate({
+    prisma.saleSku.aggregate({
       _sum: { revenueEur: true },
       where: { managerId, month },
     }),

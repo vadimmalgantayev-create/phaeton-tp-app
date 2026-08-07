@@ -21,12 +21,12 @@ async function getClientPlanFacts(managerIds, month = startOfMonth(new Date())) 
   const managerFilter = managerIds ? { managerId: { in: managerIds } } : {};
 
   const [historySales, currentSales, totalPlans] = await Promise.all([
-    prisma.salesFact.groupBy({
+    prisma.saleSku.groupBy({
       by: ['clientId', 'managerId'],
       where: { ...managerFilter, month: { gte: rangeStart, lt: rangeEnd } },
       _sum: { revenueEur: true },
     }),
-    prisma.salesFact.groupBy({
+    prisma.saleSku.groupBy({
       by: ['clientId'],
       where: { ...managerFilter, month },
       _sum: { revenueEur: true },

@@ -12,7 +12,9 @@ const SOURCE_KEYWORDS = {
   debt: ['задолженость', 'задолженность'],
   addresses: ['адресадоставки'],
   missing_invoices: ['наклодных', 'накладных'],
-  sales_facts: ['продажибизнес'],
+  // PHA-88: sales_facts.xlsx заменён на sale_sku.csv (см. schema.prisma,
+  // модель SaleSku) — ключевое слово для старого источника больше не ищем.
+  sale_sku: ['salessku'],
   plan: ['загрузкапотп'],
   order_template: ['шаблонзагрузкиформирование'],
 };
@@ -27,7 +29,9 @@ function normalize(name) {
 function findSourceFile(dir, sourceType) {
   const keywords = SOURCE_KEYWORDS[sourceType];
   if (!keywords) throw new Error(`Unknown source type: ${sourceType}`);
-  const files = fs.readdirSync(dir).filter((f) => f.toLowerCase().endsWith('.xlsx'));
+  // PHA-88: sale_sku грузится из .csv (потоковый ETL), остальные источники
+  // остаются .xlsx -- фильтр принимает оба расширения.
+  const files = fs.readdirSync(dir).filter((f) => /\.(xlsx|csv)$/i.test(f));
   const match = files.find((f) => {
     const n = normalize(f);
     return keywords.some((kw) => n.includes(kw));

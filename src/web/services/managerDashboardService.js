@@ -14,15 +14,18 @@ function startOfMonth(date) {
 async function getManagerDashboard(regionId = null) {
   const month = startOfMonth(new Date());
 
+  // PHA-88: служебные "менеджеры" из sale_sku.csv (Web, Разовый клиент...)
+  // не показываем как строку команды в кабинете руководителя -- это не
+  // сотрудники, а технические метки для данных без привязки к реальному ТП.
   const managers = await prisma.manager.findMany({
-    where: regionId != null ? { regionId } : {},
+    where: { isServiceAccount: false, ...(regionId != null ? { regionId } : {}) },
     include: { region: true },
     orderBy: { name: 'asc' },
   });
   const managerIds = managers.map((m) => m.id);
 
   const [revenueByManager, plansByManager, debtsByRegion, clientsWithoutRegion] = await Promise.all([
-    prisma.salesFact.groupBy({ by: ['managerId'], where: { month, managerId: { in: managerIds } }, _sum: { revenueEur: true } }),
+    prisma.saleSku.groupBy({ by: ['managerId'], where: { month, managerId: { in: managerIds } }, _sum: { revenueEur: true } }),
     prisma.plan.findMany({ where: { taskType: 'TOTAL', managerId: { in: managerIds } } }),
     prisma.debt.findMany({
       where: { isOverdue: true, client: { managerId: { in: managerIds } } },

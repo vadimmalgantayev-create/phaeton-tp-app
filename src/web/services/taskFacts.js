@@ -4,7 +4,7 @@ const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
-function salesFactWhere(managerId, month, config) {
+function saleSkuWhere(managerId, month, config) {
   const where = { managerId, month };
   if (config.brands) where.brand = { in: config.brands };
   else if (config.excludeBrands) where.brand = { notIn: config.excludeBrands };
@@ -15,28 +15,30 @@ function salesFactWhere(managerId, month, config) {
 // денежных/литровых задач) или число уникальных активных клиентов (для АКБ,
 // countClients: true -- "активная клиентская база" считается по клиентам,
 // у которых есть ненулевые продажи в подходящих под задачу брендах).
+//
+// PHA-88: `quantity` (штучное количество) было полем SalesFact, но
+// sale_sku.csv его не содержит (только объём/выручка, см. schema.prisma) --
+// критерий "активный клиент" здесь остался на revenueEur/volumeL.
 async function computeTaskActual(managerId, month, config) {
-  const where = salesFactWhere(managerId, month, config);
+  const where = saleSkuWhere(managerId, month, config);
 
   if (config.countClients) {
-    const rows = await prisma.salesFact.groupBy({
+    const rows = await prisma.saleSku.groupBy({
       by: ['clientId'],
       where,
-      _sum: { revenueEur: true, volumeL: true, quantity: true },
+      _sum: { revenueEur: true, volumeL: true },
     });
-    return rows.filter(
-      (r) => (r._sum.revenueEur || 0) > 0 || (r._sum.volumeL || 0) > 0 || (r._sum.quantity || 0) > 0
-    ).length;
+    return rows.filter((r) => (r._sum.revenueEur || 0) > 0 || (r._sum.volumeL || 0) > 0).length;
   }
 
-  const agg = await prisma.salesFact.aggregate({ where, _sum: { revenueEur: true, volumeL: true } });
+  const agg = await prisma.saleSku.aggregate({ where, _sum: { revenueEur: true, volumeL: true } });
   return config.metric === 'volumeL' ? agg._sum.volumeL || 0 : agg._sum.revenueEur || 0;
 }
 
 // Разбивка факта задачи по клиентам за месяц (для экрана "кто закупился").
 async function getTaskClientBreakdown(managerId, month, config) {
-  const where = salesFactWhere(managerId, month, config);
-  const rows = await prisma.salesFact.groupBy({ by: ['clientId'], where, _sum: { revenueEur: true, volumeL: true } });
+  const where = saleSkuWhere(managerId, month, config);
+  const rows = await prisma.saleSku.groupBy({ by: ['clientId'], where, _sum: { revenueEur: true, volumeL: true } });
 
   const nonZero = rows.filter((r) => (r._sum.revenueEur || 0) > 0 || (r._sum.volumeL || 0) > 0);
   const clients = await prisma.client.findMany({

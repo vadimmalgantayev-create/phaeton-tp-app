@@ -24,6 +24,7 @@ model Region {
   managers  Manager[]
   discounts Discount[]
   users     User[]
+  saleSkus  SaleSku[]
 
   @@map("regions")
 }
@@ -33,10 +34,20 @@ model Manager {
   name      String
   region    Region      @relation(fields: [regionId], references: [id])
   regionId  Int
+  // PHA-88: true для служебных "менеджеров" -- из sales_sku.csv (Web, web
+  // розница26, Разовый клиент, Сотрудник и т.п.) и из более широкого ростера
+  // компании в адресах/скидках/ДЗ/нет-накладных (не только 8 Phaeton ТП).
+  // Их данные грузятся (see SaleSku и т.д.), но сами они не должны попадать
+  // в выпадающий список входа ТП (ТЗ 1.3). Определяется в
+  // src/parsers/saleSku.js: isRealManager(name, regionName) против
+  // REAL_MANAGERS -- белый список пар (имя, регион), а не голых имён (см.
+  // её комментарий про однофамильцев из разных источников/регионов) и не
+  // чёрный список (ТЗ "и т.п." не гарантирует полноту служебных имён).
+  isServiceAccount Boolean @default(false)
   clients   Client[]
   plans     Plan[]
   acbPlans  AcbPlan[]
-  salesFacts SalesFact[]
+  saleSkus  SaleSku[]
   missingInvoices MissingInvoice[]
   user      User?
   routeVisits RouteVisit[]
@@ -154,7 +165,7 @@ model Client {
   addresses       ClientAddress[]
   discounts       Discount[]
   debt            Debt?
-  salesFacts      SalesFact[]
+  saleSkus        SaleSku[]
   missingInvoices MissingInvoice[]
   notes           Note[]
   orders          Order[]
@@ -252,20 +263,51 @@ model Debt {
   @@map("debts")
 }
 
-model SalesFact {
-  id          Int      @id @default(autoincrement())
-  manager     Manager  @relation(fields: [managerId], references: [id])
-  managerId   Int
-  client      Client   @relation(fields: [clientId], references: [id])
-  clientId    Int
-  brand       String
-  month       DateTime // first day of month, e.g. 2026-01-01
-  quantity    Float    @default(0)
-  volumeL     Float    @default(0)
-  revenueEur  Float    @default(0)
+// PHA-88: заменяет SalesFact (продажи на уровне регион→менеджер→бренд без
+// SKU и без явного региона в данных, см. README "Известные ограничения").
+// Источник — samples/sales_sku.csv, выгрузка 1С "Валовая прибыль
+// предприятия" уровня SKU, уже плоская (без outlineLevel-эвристик
+// salesFacts.js — та колонка/парсер удалены вместе со старой моделью).
+//
+// Отличия от буквальной схемы из ТЗ (там region/manager/client — String):
+// здесь они — внешние ключи на уже существующие Region/Manager/Client,
+// которыми пронизан весь остальной код (RBAC-скоуп по managerId/regionId в
+// auth/scope.js, карточка клиента по clientId, кабинет руководителя по
+// regionId). Дублировать эти сущности как сырые строки в SaleSku означало
+// бы завести второй, несогласованный источник истины по регионам/
+// менеджерам/клиентам. `month` тоже хранится как DateTime (первое число
+// месяца), а не строка "2025-01" — так же, как Plan.month и было в
+// SalesFact.month — чтобы диапазонные фильтры (`month: {gte, lt}`),
+// которые уже использует остальной код (clientPlanService, карточка
+// клиента), продолжали работать одинаково для всех источников.
+//
+// region хранится прямо на SaleSku (а не выводится из Manager.regionId) --
+// это и есть суть фикса ТЗ 1.2 ("Кар-Сити попадает в цифры Алматы"): теперь
+// принадлежность к региону приходит из данных построчно, а не через
+// связь менеджера, которая раньше считалась заведомо "Алматы" (см.
+// defaultRegionId в load.js).
+model SaleSku {
+  id           Int      @id @default(autoincrement())
+  region       Region   @relation(fields: [regionId], references: [id])
+  regionId     Int
+  manager      Manager  @relation(fields: [managerId], references: [id])
+  managerId    Int
+  client       Client   @relation(fields: [clientId], references: [id])
+  clientId     Int
+  productGroup String
+  brand        String
+  sku          String
+  month        DateTime // first day of month, e.g. 2025-01-01
+  volumeL      Float?
+  revenueKzt   Float?
+  revenueEur   Float?
 
-  @@unique([managerId, clientId, brand, month])
-  @@map("sales_facts")
+  @@index([clientId, month])
+  @@index([managerId, month])
+  @@index([clientId, brand, month])
+  @@index([clientId, sku])
+  @@index([regionId, month])
+  @@map("sale_skus")
 }
 
 model Plan {

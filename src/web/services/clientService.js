@@ -118,12 +118,18 @@ async function getClientDetail(clientId) {
     .map((d) => ({ ...d, isExpired: !isActive(d) }))
     .sort((a, b) => Number(a.isExpired) - Number(b.isExpired));
 
+  // PHA-88: sale_sku хранит факты на уровне артикула -- для этого экрана
+  // (одна строка на месяц+бренд, как раньше отдавал SalesFact) агрегируем
+  // groupBy'ем, а не тащим сырые SKU-строки (клиент может купить десятки
+  // артикулов одного бренда за месяц).
   const currentYear = new Date().getFullYear();
-  const salesHistoryRaw = await prisma.salesFact.findMany({
+  const salesHistoryRaw = await prisma.saleSku.groupBy({
+    by: ['brand', 'month'],
     where: {
       clientId,
       month: { gte: new Date(Date.UTC(currentYear, 0, 1)), lt: new Date(Date.UTC(currentYear + 1, 0, 1)) },
     },
+    _sum: { revenueEur: true, volumeL: true },
     orderBy: { month: 'desc' },
   });
 
@@ -132,9 +138,14 @@ async function getClientDetail(clientId) {
   // маслу считается по объёму, а не по обороту. Остальные бренды -- в EUR.
   const salesHistory = salesHistoryRaw.map((s) => {
     const isOil = OIL_BRANDS.includes(s.brand);
+    const revenueEur = s._sum.revenueEur || 0;
+    const volumeL = s._sum.volumeL || 0;
     return {
-      ...s,
-      amount: isOil ? s.volumeL : s.revenueEur,
+      brand: s.brand,
+      month: s.month,
+      revenueEur,
+      volumeL,
+      amount: isOil ? volumeL : revenueEur,
       unit: isOil ? 'л' : 'EUR',
     };
   });

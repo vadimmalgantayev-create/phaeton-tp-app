@@ -21,9 +21,12 @@ const router = express.Router();
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD || '123456';
 
 // Общие для формы входа списки (менеджеры для ТП, регионы для руководителя).
+// PHA-88 1.3: служебные "менеджеры" из sale_sku.csv (Web, Разовый клиент,
+// Сотрудник и т.п., isServiceAccount=true) в список входа не попадают --
+// это не сотрудники, а технические метки строк без привязки к живому ТП.
 async function loginFormOptions() {
   const [managers, regions] = await Promise.all([
-    prisma.manager.findMany({ orderBy: { name: 'asc' } }),
+    prisma.manager.findMany({ where: { isServiceAccount: false }, orderBy: { name: 'asc' } }),
     prisma.region.findMany({ orderBy: { name: 'asc' } }),
   ]);
   return { managers, regions };
@@ -127,7 +130,10 @@ router.post('/login', async (req, res, next) => {
     const manager = Number.isInteger(managerIdNum)
       ? await prisma.manager.findUnique({ where: { id: managerIdNum } })
       : null;
-    if (!manager || String(password || '') !== DEMO_PASSWORD) {
+    // PHA-88: dropdown уже не предлагает служебные менеджеры, но форма
+    // принимает managerId напрямую -- перепроверяем isServiceAccount здесь
+    // же, а не полагаемся только на то, что скрыто в вёрстке.
+    if (!manager || manager.isServiceAccount || String(password || '') !== DEMO_PASSWORD) {
       return res.status(401).render('login', { error: 'Неверный менеджер или пароль', ...options });
     }
     // Вход всегда как TP (ТЗ: роли руководитель/админ -- позже). users
