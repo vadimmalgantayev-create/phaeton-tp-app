@@ -318,6 +318,18 @@ async function loadAll(inputDir, outDir) {
       const sskRegionCache = new Map(); // region name -> id
       const sskManagerCache = new Map(); // `${name}|${regionId}` -> id
       const resolveSaleSkuClient = makeSaleSkuClientResolver(prisma, clientCache);
+      // QA PHA-88 (Критично): resolveSaleSkuClient только СОЗДАЁТ клиента с
+      // managerId из первой встреченной строки -- если клиент уже был в
+      // clientCache (пришёл из адресов/скидок/ДЗ/нет-накладных, которые
+      // грузятся раньше, шаги 1/3-5), его Client.managerId так и оставался
+      // старым, даже когда sale_sku.csv однозначно говорит про другого
+      // менеджера. Реальные продажи -- самый свежий и авторитетный источник
+      // "кто сейчас ведёт клиента" (это тот же принцип, что и фикс региона
+      // в ТЗ 1.2), поэтому здесь копится "менеджер по последнему месяцу
+      // продаж" на клиента и после стрима applies как реконсиляция --
+      // а не "кто первый в файле", т.к. порядок строк в CSV внутри клиента
+      // не гарантированно хронологический.
+      const clientLatestManager = new Map(); // clientId -> { managerId, month }
 
       await streamSaleSkuRows(saleSkuFile, sskCollector, async (batch) => {
         const data = [];
@@ -344,6 +356,11 @@ async function loadAll(inputDir, outDir) {
 
           const clientId = await resolveSaleSkuClient(row.client, managerId, sskCollector, null);
 
+          const latest = clientLatestManager.get(clientId);
+          if (!latest || row.month > latest.month) {
+            clientLatestManager.set(clientId, { managerId, month: row.month });
+          }
+
           data.push({
             regionId,
             managerId,
@@ -365,6 +382,33 @@ async function loadAll(inputDir, outDir) {
           await prisma.saleSku.createMany({ data });
         }
       });
+
+      // Реконсиляция Client.managerId (см. комментарий выше): один bulk
+      // findMany по всем клиентам, встретившимся в sale_sku.csv (~2-3
+      // тысячи, не 437 620 -- дёшево), затем точечный update только там,
+      // где менеджер по последним продажам реально разошёлся с тем, что
+      // на Client сейчас (из адресов/старой ассоциации).
+      const involvedIds = [...clientLatestManager.keys()];
+      const currentClients = await prisma.client.findMany({
+        where: { id: { in: involvedIds } },
+        select: { id: true, managerId: true },
+      });
+      let reconciled = 0;
+      for (const c of currentClients) {
+        const latest = clientLatestManager.get(c.id);
+        if (latest && latest.managerId !== c.managerId) {
+          await prisma.client.update({ where: { id: c.id }, data: { managerId: latest.managerId } });
+          reconciled += 1;
+        }
+      }
+      if (reconciled > 0) {
+        sskCollector.note(
+          null,
+          'Client.managerId',
+          `${reconciled} клиент(ов): Client.managerId переприсвоен на менеджера по последнему месяцу продаж в sale_sku.csv (был другой менеджер из адресов/скидок/ДЗ/нет-накладных)`,
+          null
+        );
+      }
 
       report.sources.push(await recordLoad(prisma, saleSkuFile, sskCollector));
     }
