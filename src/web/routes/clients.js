@@ -1,13 +1,27 @@
 'use strict';
 
 const express = require('express');
-const { listClients, getClientDetail, getClientBasic, getClientNotes, addNote, deleteNote, setNoteDone, NOTE_TAGS } = require('../services/clientService');
+const {
+  listClients,
+  getClientDetail,
+  getClientBasic,
+  getClientNotes,
+  addNote,
+  deleteNote,
+  setNoteDone,
+  NOTE_TAGS,
+  getBrandYoyComparison,
+  getDroppedSkus,
+} = require('../services/clientService');
+const { getAvailableMonths, parseMonthKey, startOfMonth } = require('../services/salesMonths');
 const { visibleManagerIds } = require('../auth/scope');
 const { requireRole } = require('../auth/middleware');
 
 const router = express.Router();
 
 const COLOR_VALUES = ['green', 'orange', 'red'];
+const DYNAMICS_VALUES = ['up', 'down'];
+const DROPPED_SKU_TOP_N = 10;
 
 // QA PHA-83: список /clients существует только для ТП (нет пункта меню и
 // экрана под RUKOVODITEL/ADMIN -- см. partials/nav.ejs), но раньше не имел
@@ -30,6 +44,10 @@ router.get('/clients', requireRole('TP'), async (req, res, next) => {
   }
 });
 
+// ТЗ PHA-88 3.1/3.3: месяц карточки -- общий для блока "Продажи по брендам"
+// (сравнение год-к-году) и блока "Выпавшие SKU" (окно из 6 месяцев ДО этого
+// месяца), один селектор на оба, а не два независимых -- сама карточка
+// показывает срез на один выбранный месяц.
 router.get('/clients/:id', async (req, res, next) => {
   try {
     const clientId = Number(req.params.id);
@@ -41,7 +59,35 @@ router.get('/clients/:id', async (req, res, next) => {
       return res.status(403).send('Недостаточно прав для просмотра этого клиента');
     }
 
-    res.render('clientDetail', { ...data, user: req.user });
+    const month = parseMonthKey(req.query.month) || startOfMonth(new Date());
+    const dynamics = DYNAMICS_VALUES.includes(req.query.dynamics) ? req.query.dynamics : null;
+    const droppedAll = req.query.droppedAll === '1';
+
+    const [availableMonths, brandComparison, droppedSkus] = await Promise.all([
+      getAvailableMonths(),
+      getBrandYoyComparison(clientId, month),
+      getDroppedSkus(clientId, month),
+    ]);
+
+    const brandRows = dynamics ? brandComparison.rows.filter((r) => r.direction === dynamics) : brandComparison.rows;
+
+    const droppedRows = droppedAll ? droppedSkus.rows : droppedSkus.rows.slice(0, DROPPED_SKU_TOP_N);
+    const droppedTotalLoss = droppedRows.reduce((sum, r) => sum + r.lossEur, 0);
+
+    res.render('clientDetail', {
+      ...data,
+      user: req.user,
+      month,
+      availableMonths,
+      dynamics,
+      brandRows,
+      hasBase: brandComparison.hasBase,
+      lastYearMonth: brandComparison.lastYearMonth,
+      droppedRows,
+      droppedTotal: droppedSkus.rows.length,
+      droppedAll,
+      droppedTotalLoss,
+    });
   } catch (err) {
     next(err);
   }

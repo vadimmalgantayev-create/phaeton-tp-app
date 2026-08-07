@@ -2,10 +2,14 @@
 
 const { PrismaClient } = require('@prisma/client');
 const { getClientPlanFacts } = require('./clientPlanService');
-const { OIL_BRANDS } = require('./taskBrandMapping');
+const { addMonths } = require('./salesMonths');
 
 const prisma = new PrismaClient();
 const PAGE_SIZE = 30;
+
+// ТЗ PHA-88 3.3: окно и порог "регулярности" SKU.
+const DROPPED_SKU_WINDOW_MONTHS = 6;
+const DROPPED_SKU_MIN_MONTHS = 4;
 
 // PHA-85: фиксированный набор меток заметки -- строго эти три, не выдумывать
 // новые (см. ТЗ задачи). Порядок здесь -- порядок в select на форме.
@@ -74,11 +78,11 @@ async function listClients({ managerIds, q, page = 1, color = null } = {}) {
   };
 }
 
-// ТЗ 6.4: реквизиты, скидки, статус ДЗ, сигнал "нет накладных", история
-// продаж, заметки. Индивидуальный план/факт клиента (PHA-79 п.3, расчётный
-// -- см. clientPlanService.js) показывается в списке /clients, а не здесь:
-// карточка клиента остаётся историей продаж, чтобы не дублировать один и
-// тот же расчёт на двух экранах.
+// ТЗ 6.4: реквизиты, скидки, статус ДЗ, сигнал "нет накладных", заметки.
+// Индивидуальный план/факт клиента (PHA-79 п.3, расчётный -- см.
+// clientPlanService.js) показывается в списке /clients, а не здесь: карточка
+// клиента остаётся историей продаж, чтобы не дублировать один и тот же
+// расчёт на двух экранах.
 //
 // Скидки на карточке -- только индивидуальные скидки ЭТОГО клиента
 // (client.discounts, clientId != null в "Действующие скидки"). Региональная
@@ -90,9 +94,11 @@ async function listClients({ managerIds, q, page = 1, color = null } = {}) {
 // (см. resolveDiscountPercent в pricing.js/catalogService.js/orderService.js)
 // -- там её убирать нельзя, это отдельный экран/расчёт.
 //
-// История продаж -- только текущий календарный год (PHA-80, баг 2): было
-// `take: 12` без фильтра по году, что подмешивало старые периоды прошлого
-// года для клиентов с менее чем 12 продажами в этом году.
+// PHA-88 Блок 3: раздел "История продаж" (плоский список месяц+бренд за
+// текущий календарный год) заменён на "Продажи по брендам" -- см.
+// getBrandYoyComparison/getDroppedSkus ниже, они читаются отдельно в роуте
+// (не отсюда), т.к. зависят от выбранного в карточке месяца (query-параметр
+// ?month=), а не от даты запроса.
 async function getClientDetail(clientId) {
   const client = await prisma.client.findUnique({
     where: { id: clientId },
@@ -118,39 +124,111 @@ async function getClientDetail(clientId) {
     .map((d) => ({ ...d, isExpired: !isActive(d) }))
     .sort((a, b) => Number(a.isExpired) - Number(b.isExpired));
 
-  // PHA-88: sale_sku хранит факты на уровне артикула -- для этого экрана
-  // (одна строка на месяц+бренд, как раньше отдавал SalesFact) агрегируем
-  // groupBy'ем, а не тащим сырые SKU-строки (клиент может купить десятки
-  // артикулов одного бренда за месяц).
-  const currentYear = new Date().getFullYear();
-  const salesHistoryRaw = await prisma.saleSku.groupBy({
-    by: ['brand', 'month'],
-    where: {
-      clientId,
-      month: { gte: new Date(Date.UTC(currentYear, 0, 1)), lt: new Date(Date.UTC(currentYear + 1, 0, 1)) },
-    },
-    _sum: { revenueEur: true, volumeL: true },
-    orderBy: { month: 'desc' },
+  return { client };
+}
+
+// ТЗ PHA-88 3.1: продажи по брендам для выбранного месяца карточки клиента,
+// с сравнением к тому же месяцу прошлого года. `hasBase` -- есть ли вообще
+// данные за месяц-год-назад (для месяцев 2025 года пары за 2024 нет, ТЗ
+// прямо просит показать "нет базы", а не 0/100% отставания). Определяется
+// по реальному минимуму месяца в SaleSku, а не хардкодом "2025" -- если ETL
+// когда-нибудь подгрузит более раннюю историю, порог сдвинется сам.
+//
+// Список брендов в строке -- объединение брендов текущего месяца и брендов
+// того же месяца год назад (а не "все бренды когда-либо купленные"), чтобы
+// таблица отражала именно два сравниваемых периода, как просит ТЗ.
+async function getBrandYoyComparison(clientId, month) {
+  const lastYearMonth = addMonths(month, -12);
+
+  const [minMonthAgg, currentRows] = await Promise.all([
+    prisma.saleSku.aggregate({ _min: { month: true } }),
+    prisma.saleSku.groupBy({ by: ['brand'], where: { clientId, month }, _sum: { revenueEur: true, volumeL: true } }),
+  ]);
+  const hasBase = !!minMonthAgg._min.month && lastYearMonth >= minMonthAgg._min.month;
+
+  const lastYearRows = hasBase
+    ? await prisma.saleSku.groupBy({
+        by: ['brand'],
+        where: { clientId, month: lastYearMonth },
+        _sum: { revenueEur: true, volumeL: true },
+      })
+    : [];
+
+  const currentByBrand = new Map(currentRows.map((r) => [r.brand, r._sum.revenueEur || 0]));
+  const lastYearByBrand = new Map(lastYearRows.map((r) => [r.brand, r._sum.revenueEur || 0]));
+  const brands = new Set([...currentByBrand.keys(), ...lastYearByBrand.keys()]);
+
+  const rows = [...brands].map((brand) => {
+    const currentEur = currentByBrand.get(brand) || 0;
+    if (!hasBase) {
+      return { brand, currentEur, lastYearEur: null, deviationEur: null, deviationPercent: null, isNew: false, direction: null };
+    }
+    const lastYearEur = lastYearByBrand.get(brand) || 0;
+    const deviationEur = currentEur - lastYearEur;
+    // ТЗ 3.1: прошлый год = 0 -> "новый" вместо %. ТЗ 3.2: "новые" бренды
+    // (не было в прошлом году) считаются приростом.
+    const isNew = lastYearEur === 0 && currentEur > 0;
+    const deviationPercent = lastYearEur !== 0 ? (deviationEur / lastYearEur) * 100 : null;
+    const direction = deviationEur > 0 ? 'up' : deviationEur < 0 ? 'down' : null;
+    return { brand, currentEur, lastYearEur, deviationEur, deviationPercent, isNew, direction };
   });
 
-  // PHA-84: масляные бренды (FUCHS, MaxPro1, AFINOL — тот же список, что и
-  // задача "Масло" в taskBrandMapping.js) считаются в литрах, т.к. премия по
-  // маслу считается по объёму, а не по обороту. Остальные бренды -- в EUR.
-  const salesHistory = salesHistoryRaw.map((s) => {
-    const isOil = OIL_BRANDS.includes(s.brand);
-    const revenueEur = s._sum.revenueEur || 0;
-    const volumeL = s._sum.volumeL || 0;
-    return {
-      brand: s.brand,
-      month: s.month,
-      revenueEur,
-      volumeL,
-      amount: isOil ? volumeL : revenueEur,
-      unit: isOil ? 'л' : 'EUR',
-    };
+  rows.sort((a, b) => b.currentEur - a.currentEur);
+  return { rows, hasBase, month, lastYearMonth };
+}
+
+// ТЗ PHA-88 3.3: "выпавшие" регулярные SKU клиента на выбранный месяц
+// карточки. Регулярный = закуп (revenueEur > 0) в >= 4 из 6 полных месяцев
+// перед выбранным (окно НЕ включает сам выбранный месяц). Выпавший =
+// регулярный SKU без закупа в выбранном месяце. Потеря = средний закуп по
+// месяцам окна, где он был (не по всем 6 -- иначе "средний закуп" занижался
+// бы для SKU с меньшим числом закупов внутри порога регулярности).
+async function getDroppedSkus(clientId, month) {
+  const windowStart = addMonths(month, -DROPPED_SKU_WINDOW_MONTHS);
+  const windowEnd = addMonths(month, -1); // последний полный месяц перед выбранным
+
+  const windowRows = await prisma.saleSku.groupBy({
+    by: ['sku', 'brand', 'productGroup', 'month'],
+    where: { clientId, month: { gte: windowStart, lte: windowEnd } },
+    _sum: { revenueEur: true },
   });
 
-  return { client, salesHistory };
+  const bySku = new Map(); // sku -> { brand, productGroup, purchases: [{month, revenueEur}] }
+  for (const r of windowRows) {
+    const revenueEur = r._sum.revenueEur || 0;
+    if (revenueEur <= 0) continue; // "покупал" -- закуп строго > 0
+    if (!bySku.has(r.sku)) bySku.set(r.sku, { brand: r.brand, productGroup: r.productGroup, purchases: [] });
+    bySku.get(r.sku).purchases.push({ month: r.month, revenueEur });
+  }
+
+  const regularSkus = [...bySku.entries()].filter(([, v]) => v.purchases.length >= DROPPED_SKU_MIN_MONTHS);
+  if (regularSkus.length === 0) return { rows: [] };
+
+  const currentMonthRows = await prisma.saleSku.groupBy({
+    by: ['sku'],
+    where: { clientId, month, sku: { in: regularSkus.map(([sku]) => sku) } },
+    _sum: { revenueEur: true },
+  });
+  const currentBySku = new Map(currentMonthRows.map((r) => [r.sku, r._sum.revenueEur || 0]));
+
+  const dropped = regularSkus
+    .filter(([sku]) => (currentBySku.get(sku) || 0) <= 0)
+    .map(([sku, v]) => {
+      const totalRevenue = v.purchases.reduce((sum, p) => sum + p.revenueEur, 0);
+      const lossEur = totalRevenue / v.purchases.length;
+      const lastMonth = v.purchases.reduce((max, p) => (p.month > max ? p.month : max), v.purchases[0].month);
+      return {
+        sku,
+        brand: v.brand,
+        productGroup: v.productGroup,
+        monthsBought: v.purchases.length,
+        lastMonth,
+        lossEur,
+      };
+    });
+
+  dropped.sort((a, b) => b.lossEur - a.lossEur);
+  return { rows: dropped };
 }
 
 // Лёгкая выборка клиента без тяжёлых include -- для заголовка экрана заметок
@@ -210,4 +288,15 @@ async function setNoteDone(clientId, noteId, done) {
   return result.count > 0;
 }
 
-module.exports = { listClients, getClientDetail, getClientBasic, getClientNotes, addNote, deleteNote, setNoteDone, NOTE_TAGS };
+module.exports = {
+  listClients,
+  getClientDetail,
+  getClientBasic,
+  getClientNotes,
+  addNote,
+  deleteNote,
+  setNoteDone,
+  NOTE_TAGS,
+  getBrandYoyComparison,
+  getDroppedSkus,
+};

@@ -59,17 +59,82 @@
       <% } %>
     </div>
 
+    <% const monthKey = function(d) { return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0'); }; %>
+    <% const monthLabel = function(d) { return new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(d); }; %>
+    <% const dynamicsParam = dynamics ? `dynamics=${dynamics}&` : ''; %>
+    <% const monthParam = `month=${monthKey(month)}&`; %>
+
     <div class="card">
-      <h2>История продаж (<%= new Date().getFullYear() %>)</h2>
-      <% if (salesHistory.length === 0) { %>
-        <p class="empty-state">Продаж в этом году не найдено</p>
+      <h2>Продажи по брендам</h2>
+      <form method="get" action="/clients/<%= client.id %>" class="form">
+        <% if (dynamics) { %><input type="hidden" name="dynamics" value="<%= dynamics %>"><% } %>
+        <select class="form-input" name="month" onchange="this.form.submit()">
+          <% availableMonths.forEach(function(m) { %>
+            <option value="<%= monthKey(m) %>" <%= monthKey(m) === monthKey(month) ? 'selected' : '' %>><%= monthLabel(m) %></option>
+          <% }) %>
+        </select>
+      </form>
+      <div class="color-filter" style="margin-top:10px">
+        <a class="color-filter-btn<%= !dynamics ? ' active' : '' %>" href="?<%= monthParam %>">Все</a>
+        <a class="color-filter-btn<%= dynamics === 'up' ? ' active' : '' %>" href="?<%= monthParam %>dynamics=up">Прирост</a>
+        <a class="color-filter-btn<%= dynamics === 'down' ? ' active' : '' %>" href="?<%= monthParam %>dynamics=down">Отставание</a>
+      </div>
+
+      <% if (!hasBase) { %>
+        <p class="empty-state" style="margin-top:10px">Для <%= monthLabel(month) %> нет базы для сравнения (данные начинаются с января 2025) — показан только текущий месяц.</p>
+      <% } %>
+
+      <% if (brandRows.length === 0) { %>
+        <p class="empty-state" style="margin-top:10px">Продаж за <%= monthLabel(month) %> не найдено</p>
       <% } else { %>
-        <% salesHistory.forEach(function(s) { %>
+        <% brandRows.forEach(function(r) { %>
           <div class="task-row">
-            <div class="task-name"><%= new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(s.month) %> · <%= s.brand %></div>
-            <div class="weight-badge"><%= Math.round(s.amount).toLocaleString('ru-RU') %> <%= s.unit %></div>
+            <div class="task-name">
+              <%= r.brand %>
+              <span class="task-target">
+                <%= Math.round(r.currentEur).toLocaleString('ru-RU') %> EUR
+                <% if (hasBase) { %>
+                  · <%= monthLabel(lastYearMonth) %>: <%= Math.round(r.lastYearEur).toLocaleString('ru-RU') %> EUR
+                <% } %>
+              </span>
+            </div>
+            <% if (hasBase) { %>
+              <div class="<%= r.direction === 'up' ? 'deviation-up' : r.direction === 'down' ? 'deviation-down' : '' %>">
+                <%= r.deviationEur >= 0 ? '+' : '' %><%= Math.round(r.deviationEur).toLocaleString('ru-RU') %> EUR
+                <span class="task-target">
+                  <% if (r.isNew) { %>новый<% } else if (r.deviationPercent === null) { %>—<% } else { %><%= r.deviationPercent >= 0 ? '+' : '' %><%= Math.round(r.deviationPercent) %>%<% } %>
+                </span>
+              </div>
+            <% } %>
           </div>
         <% }) %>
+      <% } %>
+    </div>
+
+    <div class="card">
+      <h2>Выпавшие SKU</h2>
+      <p class="empty-state">
+        Регулярный SKU — закуп в ≥4 из последних 6 полных месяцев перед <%= monthLabel(month) %>, без закупа в этом месяце.
+      </p>
+      <% if (droppedRows.length === 0) { %>
+        <p class="empty-state" style="margin-top:10px">Выпавших SKU не найдено</p>
+      <% } else { %>
+        <% droppedRows.forEach(function(d) { %>
+          <div class="task-row">
+            <div class="task-name">
+              <%= d.sku %>
+              <span class="task-target"><%= d.brand %> · <%= d.productGroup %> · закуп <%= d.monthsBought %>/6 · последний закуп: <%= monthLabel(d.lastMonth) %></span>
+            </div>
+            <div class="weight-badge"><%= Math.round(d.lossEur).toLocaleString('ru-RU') %> EUR</div>
+          </div>
+        <% }) %>
+        <div class="task-row">
+          <div class="task-name"><strong>Итого (показано <%= droppedRows.length %> из <%= droppedTotal %>)</strong></div>
+          <div class="weight-badge"><%= Math.round(droppedTotalLoss).toLocaleString('ru-RU') %> EUR</div>
+        </div>
+        <% if (!droppedAll && droppedTotal > droppedRows.length) { %>
+          <a class="weight-badge" style="display:inline-block;margin-top:10px" href="?<%= monthParam %><%= dynamicsParam %>droppedAll=1">Показать все выпавшие</a>
+        <% } %>
       <% } %>
     </div>
   </div>

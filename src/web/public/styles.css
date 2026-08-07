@@ -319,6 +319,19 @@ html, body {
   border-color: #f0765c;
 }
 
+/* PHA-88 Блок 3: "Продажи по брендам" (карточка клиента) -- прирост/
+   отставание к тому же месяцу прошлого года, те же цвета, что и остальной
+   палитре зелёный/красный (client-fact-*, distance-*). */
+.deviation-up {
+  color: #4fd18b;
+  font-weight: 700;
+}
+
+.deviation-down {
+  color: #f0765c;
+  font-weight: 700;
+}
+
 /* PHA-85: экран "Заметки" по клиенту */
 .note-text {
   margin: 6px 0 2px;
