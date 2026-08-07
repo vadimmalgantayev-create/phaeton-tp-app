@@ -3,16 +3,19 @@
     <a href="/">Главная</a>
     <a href="/catalog">Каталог</a>
     <a href="/clients">Клиенты</a>
+    <a href="/reports">Отчёты</a>
     <a href="/notifications">Уведомления</a>
     <a href="/route">Маршрут</a>
   <% } %>
   <% if (user.role === 'RUKOVODITEL') { %>
     <a href="/manager">Руководитель</a>
     <a href="/manager/visits">Посещения</a>
+    <a href="/reports">Отчёты</a>
   <% } %>
   <% if (user.role === 'ADMIN') { %>
     <a href="/manager">Руководитель</a>
     <a href="/manager/visits">Посещения</a>
+    <a href="/reports">Отчёты</a>
     <a href="/admin/users">Пользователи</a>
   <% } %>
   <% if (user.role === 'TP') { %>

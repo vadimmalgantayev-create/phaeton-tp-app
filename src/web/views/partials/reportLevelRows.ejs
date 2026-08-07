@@ -1,0 +1,26 @@
+<%# Фрагмент HTML (не отдельная страница) -- отдаётся AJAX-эндпоинтом
+    /reports/clients/expand и вставляется в DOM через fetch()+innerHTML
+    (см. <script> в reportClients.ejs). Один и тот же партиал для всех трёх
+    уровней раскрытия (группа/бренд/артикул) -- их строки структурно
+    одинаковы (название + сумма EUR [+ литры] [+ кнопка раскрыть]),
+    различается только то, что кладёт роут в `rows`. %>
+<% rows.forEach(function(r) { %>
+  <div class="report-row">
+    <div class="task-row">
+      <div class="task-name">
+        <% if (r.nextUrl) { %>
+          <button type="button" class="report-toggle" data-url="<%= r.nextUrl %>">▶</button>
+        <% } %>
+        <%= r.label %>
+      </div>
+      <div class="weight-badge">
+        <%= Math.round(r.revenueEur).toLocaleString('ru-RU') %> EUR
+        <% if (r.volumeL !== null) { %> · <%= Math.round(r.volumeL).toLocaleString('ru-RU') %> л<% } %>
+      </div>
+    </div>
+    <% if (r.nextUrl) { %><div class="report-children report-hidden"></div><% } %>
+  </div>
+<% }) %>
+<% if (rows.length === 0) { %>
+  <p class="empty-state">Нет данных</p>
+<% } %>

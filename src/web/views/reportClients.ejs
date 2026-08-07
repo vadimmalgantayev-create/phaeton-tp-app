@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Отчёты — Продажи по клиентам — Phaeton ТП</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+</head>
+<body>
+  <div class="screen">
+    <%- include('partials/nav', { user }) %>
+    <div class="header">
+      <h1>Продажи по клиентам</h1>
+    </div>
+
+    <% const mgrParam = queryManagerId ? `managerId=${queryManagerId}&` : ''; %>
+
+    <div class="card">
+      <form method="get" action="/reports/clients" class="form">
+        <select class="form-input" name="month" onchange="this.form.submit()">
+          <% availableMonths.forEach(function(m) { %>
+            <option value="<%= monthKey(m) %>" <%= monthKey(m) === monthKey(month) ? 'selected' : '' %>><%= new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(m) %></option>
+          <% }) %>
+        </select>
+        <% if (managerOptions.length > 0) { %>
+          <select class="form-input" name="managerId" onchange="this.form.submit()">
+            <option value="">Все ТП</option>
+            <% managerOptions.forEach(function(m) { %>
+              <option value="<%= m.id %>" <%= queryManagerId === m.id ? 'selected' : '' %>><%= m.name %></option>
+            <% }) %>
+          </select>
+        <% } %>
+      </form>
+      <a class="weight-badge" style="display:inline-block;margin-top:10px;text-decoration:none"
+         href="/reports/clients/export.xlsx?month=<%= monthKey(month) %>&<%= mgrParam %>">Выгрузить в Excel</a>
+    </div>
+
+    <div class="card">
+      <p class="empty-state">Найдено клиентов: <%= total %> (<%= page %>/<%= totalPages %>)</p>
+      <% if (items.length === 0) { %>
+        <p class="empty-state" style="margin-top:10px">Продаж за выбранный месяц не найдено</p>
+      <% } else { %>
+        <% items.forEach(function(c) { %>
+          <div class="report-row">
+            <div class="task-row">
+              <div class="task-name">
+                <button type="button" class="report-toggle" data-url="/reports/clients/expand?level=group&clientId=<%= c.clientId %>&month=<%= monthKey(month) %>&<%= mgrParam %>">▶</button>
+                <a href="/clients/<%= c.clientId %>" style="color:inherit;text-decoration:none"><%= c.name %></a>
+                <% if (c.managerName) { %><span class="task-target"><%= c.managerName %></span><% } %>
+              </div>
+              <div class="weight-badge"><%= Math.round(c.revenueEur).toLocaleString('ru-RU') %> EUR</div>
+            </div>
+            <div class="report-children report-hidden"></div>
+          </div>
+        <% }) %>
+        <div class="task-row">
+          <div class="task-name"><strong>Итого по менеджеру<% if (!queryManagerId && managerOptions.length > 0) { %> (все ТП)<% } %></strong></div>
+          <div class="weight-badge"><%= Math.round(managerTotalEur).toLocaleString('ru-RU') %> EUR</div>
+        </div>
+      <% } %>
+    </div>
+
+    <div class="card">
+      <div class="nav">
+        <% if (page > 1) { %><a href="?month=<%= monthKey(month) %>&<%= mgrParam %>page=<%= page - 1 %>">← назад</a><% } %>
+        <% if (page < totalPages) { %><a href="?month=<%= monthKey(month) %>&<%= mgrParam %>page=<%= page + 1 %>">вперёд →</a><% } %>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ТЗ PHA-88 Блок 2: ленивое раскрытие дерева клиент -> группа -> бренд ->
+    // артикул через AJAX (не рендерим всё дерево сразу). Один делегированный
+    // обработчик на document, а не по обработчику на кнопку -- строки,
+    // добавленные следующим уровнем раскрытия, тоже кликабельны без
+    // повторной привязки (тот же приём, что и в route.ejs для чек-ина).
+    document.addEventListener('click', function (e) {
+      var toggle = e.target.closest('.report-toggle');
+      if (!toggle) return;
+      var row = toggle.closest('.report-row');
+      var container = row.querySelector(':scope > .report-children');
+      if (container.dataset.loaded === '1') {
+        var hidden = container.classList.toggle('report-hidden');
+        toggle.textContent = hidden ? '▶' : '▼';
+        return;
+      }
+      toggle.disabled = true;
+      fetch(toggle.dataset.url)
+        .then(function (r) { return r.text(); })
+        .then(function (html) {
+          container.innerHTML = html;
+          container.dataset.loaded = '1';
+          container.classList.remove('report-hidden');
+          toggle.textContent = '▼';
+          toggle.disabled = false;
+        })
+        .catch(function () {
+          toggle.disabled = false;
+        });
+    });
+  </script>
+</body>
+</html>

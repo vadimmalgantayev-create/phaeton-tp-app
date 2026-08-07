@@ -193,12 +193,28 @@ async function getDroppedSkus(clientId, month) {
     _sum: { revenueEur: true },
   });
 
-  const bySku = new Map(); // sku -> { brand, productGroup, purchases: [{month, revenueEur}] }
+  // QA PHA-88 (Мелочь): brand/productGroup берутся из строки с самым
+  // поздним month внутри окна для этого SKU, а не из первой попавшейся --
+  // на ~0.05% SKU в реальных данных 1С меняет brand/productGroup у того же
+  // артикула между месяцами (пересортировка номенклатуры), и карточка
+  // должна показывать актуальную метку, а не произвольную из ответа БД
+  // (groupBy не гарантирует порядок строк). На сумму потери/число месяцев
+  // закупа это не влияет -- они считаются по revenueEur/month, не по
+  // group/brand.
+  const bySku = new Map(); // sku -> { brand, productGroup, labelMonth, purchases: [{month, revenueEur}] }
   for (const r of windowRows) {
     const revenueEur = r._sum.revenueEur || 0;
     if (revenueEur <= 0) continue; // "покупал" -- закуп строго > 0
-    if (!bySku.has(r.sku)) bySku.set(r.sku, { brand: r.brand, productGroup: r.productGroup, purchases: [] });
-    bySku.get(r.sku).purchases.push({ month: r.month, revenueEur });
+    if (!bySku.has(r.sku)) {
+      bySku.set(r.sku, { brand: r.brand, productGroup: r.productGroup, labelMonth: r.month, purchases: [] });
+    }
+    const entry = bySku.get(r.sku);
+    if (r.month > entry.labelMonth) {
+      entry.brand = r.brand;
+      entry.productGroup = r.productGroup;
+      entry.labelMonth = r.month;
+    }
+    entry.purchases.push({ month: r.month, revenueEur });
   }
 
   const regularSkus = [...bySku.entries()].filter(([, v]) => v.purchases.length >= DROPPED_SKU_MIN_MONTHS);

@@ -332,6 +332,35 @@ html, body {
   font-weight: 700;
 }
 
+/* PHA-88 Блок 2: вкладка "Отчёты" -- ленивое AJAX-раскрытие дерева клиент ->
+   группа -> бренд -> артикул (см. reportClients.ejs / partials/reportLevelRows.ejs).
+   .report-children вложены рекурсивно -- отступ каждого уровня складывается
+   через padding-left, поэтому отдельных .report-children-level-N классов не
+   заводим. */
+.report-children {
+  padding-left: 16px;
+  border-left: 1px solid #262a33;
+  margin-left: 4px;
+}
+
+.report-hidden {
+  display: none;
+}
+
+.report-toggle {
+  background: none;
+  border: none;
+  color: #9a9fab;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0 6px 0 0;
+}
+
+.report-toggle:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* PHA-85: экран "Заметки" по клиенту */
 .note-text {
   margin: 6px 0 2px;

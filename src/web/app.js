@@ -15,6 +15,7 @@ const routeRouter = require('./routes/route');
 const managerRouter = require('./routes/manager');
 const apiRouter = require('./routes/api');
 const tasksRouter = require('./routes/tasks');
+const reportsRouter = require('./routes/reports');
 
 function createApp() {
   const app = express();
@@ -38,6 +39,7 @@ function createApp() {
   app.use('/', requireAuth, managerRouter);
   app.use('/', requireAuth, apiRouter);
   app.use('/', requireAuth, tasksRouter);
+  app.use('/', requireAuth, reportsRouter);
 
   app.use((err, req, res, next) => {
     console.error(err);
