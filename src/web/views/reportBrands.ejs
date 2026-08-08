@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <title>Отчёты — Продажи по клиентам — Phaeton ТП</title>
+  <title>Отчёты — Продажи по брендам — Phaeton ТП</title>
   <link rel="stylesheet" href="/styles.css">
   <link rel="manifest" href="/manifest.webmanifest">
 </head>
@@ -11,14 +11,14 @@
   <div class="screen">
     <%- include('partials/nav', { user }) %>
     <div class="header">
-      <h1>Продажи по клиентам</h1>
+      <h1>Продажи по брендам</h1>
     </div>
-    <%- include('partials/reportsSubnav', { active: 'clients' }) %>
+    <%- include('partials/reportsSubnav', { active: 'brands' }) %>
 
     <% const mgrParam = queryManagerId ? `managerId=${queryManagerId}&` : ''; %>
 
     <div class="card">
-      <form method="get" action="/reports/clients" class="form">
+      <form method="get" action="/reports/brands" class="form">
         <select class="form-input" name="month" onchange="this.form.submit()">
           <% availableMonths.forEach(function(m) { %>
             <option value="<%= monthKey(m) %>" <%= monthKey(m) === monthKey(month) ? 'selected' : '' %>><%= new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(m) %></option>
@@ -34,23 +34,26 @@
         <% } %>
       </form>
       <a class="weight-badge" style="display:inline-block;margin-top:10px;text-decoration:none"
-         href="/reports/clients/export.xlsx?month=<%= monthKey(month) %>&<%= mgrParam %>">Выгрузить в Excel</a>
+         href="/reports/brands/export.xlsx?month=<%= monthKey(month) %>&<%= mgrParam %>">Выгрузить в Excel</a>
     </div>
 
     <div class="card">
-      <p class="empty-state">Найдено клиентов: <%= total %> (<%= page %>/<%= totalPages %>)</p>
+      <p class="empty-state">Найдено брендов: <%= total %> (<%= page %>/<%= totalPages %>)</p>
       <% if (items.length === 0) { %>
         <p class="empty-state" style="margin-top:10px">Продаж за выбранный месяц не найдено</p>
       <% } else { %>
-        <% items.forEach(function(c) { %>
+        <% items.forEach(function(b) { %>
           <div class="report-row">
             <div class="task-row">
               <div class="task-name">
-                <button type="button" class="report-toggle" data-url="/reports/clients/expand?level=group&clientId=<%= c.clientId %>&month=<%= monthKey(month) %>&<%= mgrParam %>">▶</button>
-                <a href="/clients/<%= c.clientId %>" style="color:inherit;text-decoration:none"><%= c.name %></a>
-                <% if (c.managerName) { %><span class="task-target"><%= c.managerName %></span><% } %>
+                <button type="button" class="report-toggle" data-url="/reports/brands/expand?level=client&brand=<%= encodeURIComponent(b.brand) %>&month=<%= monthKey(month) %>&<%= mgrParam %>">▶</button>
+                <%= b.brand %>
+                <% if (b.percent !== null) { %><span class="task-target">доля в обороте: <%= b.percent.toFixed(1) %>%</span><% } %>
               </div>
-              <div class="weight-badge"><%= Math.round(c.revenueEur).toLocaleString('ru-RU') %> EUR</div>
+              <div class="weight-badge">
+                <%= Math.round(b.revenueEur).toLocaleString('ru-RU') %> EUR
+                <% if (b.showLiters) { %> · <%= Math.round(b.volumeL).toLocaleString('ru-RU') %> л<% } %>
+              </div>
             </div>
             <div class="report-children report-hidden"></div>
           </div>

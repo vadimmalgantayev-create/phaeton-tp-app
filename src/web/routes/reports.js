@@ -6,13 +6,19 @@ const {
   getReportManagerOptions,
   getClientsPage,
   isClientInReportScope,
+  isInReportScope,
   getGroupBreakdown,
   getBrandBreakdown,
   getSkuBreakdown,
   getClientsExportRows,
+  getBrandsPage,
+  getBrandClientBreakdown,
+  getBrandClientSkuBreakdown,
+  getBrandsExportRows,
 } = require('../services/reportsService');
 const { getAvailableMonths, parseMonthKey, monthKey, startOfMonth } = require('../services/salesMonths');
 const { buildClientsReportWorkbookBuffer } = require('../../exportClientsReport');
+const { buildBrandsReportWorkbookBuffer } = require('../../exportBrandsReport');
 
 const router = express.Router();
 
@@ -124,6 +130,95 @@ router.get('/reports/clients/expand', async (req, res, next) => {
     const rows = await getSkuBreakdown(clientId, productGroup, brand, month);
     res.render('partials/reportLevelRows', {
       rows: rows.map((r) => ({ key: r.sku, label: r.sku, revenueEur: r.revenueEur, volumeL: r.showLiters ? r.volumeL : null, nextUrl: null })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ТЗ 2.2: "Продажи по брендам" -- бренд -> клиенты -> артикулы (см.
+// reportsService.js: getBrandsPage и комментарий над ней про то, чем 2.2
+// отличается от 2.1).
+router.get('/reports/brands', async (req, res, next) => {
+  try {
+    const { month, queryManagerId, where } = parseReportFilters(req.query, req.user);
+    const page = Math.max(1, Number(req.query.page) || 1);
+
+    const [availableMonths, managerOptions, data] = await Promise.all([
+      getAvailableMonths(),
+      getReportManagerOptions(req.user),
+      getBrandsPage(where, page),
+    ]);
+
+    res.render('reportBrands', {
+      user: req.user,
+      month,
+      monthKey,
+      availableMonths,
+      managerOptions,
+      queryManagerId,
+      ...data,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/reports/brands/export.xlsx', async (req, res, next) => {
+  try {
+    const { month, where } = parseReportFilters(req.query, req.user);
+    const rows = await getBrandsExportRows(where);
+    const buffer = buildBrandsReportWorkbookBuffer(rows);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="brands-${monthKey(month)}.xlsx"`);
+    res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// AJAX-раскрытие для 2.2: level=client (бренд -> клиенты) или level=sku
+// (клиент внутри бренда -> артикулы). RBAC той же схемой, что и у 2.1
+// (isInReportScope против того же `where`, что и видимый список) --
+// level=client проверяет brand, level=sku проверяет brand+clientId вместе,
+// а не по отдельности (независимые проверки безопасны, но комбинированная
+// точнее отражает то, что реально запрашивается).
+router.get('/reports/brands/expand', async (req, res, next) => {
+  try {
+    const { month, where } = parseReportFilters(req.query, req.user);
+    const brand = req.query.brand;
+    const level = req.query.level; // 'client' | 'sku'
+
+    if (!brand || !['client', 'sku'].includes(level)) {
+      return res.status(400).send('Некорректные параметры раскрытия');
+    }
+    if (!(await isInReportScope(where, { brand }))) {
+      return res.status(403).send('Недостаточно прав для просмотра этого бренда');
+    }
+
+    const qs = `brand=${encodeURIComponent(brand)}&month=${monthKey(month)}${req.query.managerId ? `&managerId=${req.query.managerId}` : ''}`;
+
+    if (level === 'client') {
+      const rows = await getBrandClientBreakdown(where, brand);
+      return res.render('partials/reportLevelRows', {
+        rows: rows.map((r) => ({
+          key: r.clientId,
+          label: r.name,
+          revenueEur: r.revenueEur,
+          volumeL: r.volumeL,
+          nextUrl: `/reports/brands/expand?level=sku&${qs}&clientId=${r.clientId}`,
+        })),
+      });
+    }
+
+    // level === 'sku' -- лист.
+    const clientId = Number(req.query.clientId);
+    if (!Number.isInteger(clientId) || !(await isInReportScope(where, { brand, clientId }))) {
+      return res.status(403).send('Недостаточно прав для просмотра этого клиента');
+    }
+    const rows = await getBrandClientSkuBreakdown(where, brand, clientId);
+    res.render('partials/reportLevelRows', {
+      rows: rows.map((r) => ({ key: r.sku, label: r.sku, revenueEur: r.revenueEur, volumeL: r.volumeL, nextUrl: null })),
     });
   } catch (err) {
     next(err);

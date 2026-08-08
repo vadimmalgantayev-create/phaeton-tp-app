@@ -114,6 +114,17 @@ async function isClientInReportScope(where, clientId) {
   return count > 0;
 }
 
+/** Обобщённая версия isClientInReportScope для отчёта 2.2 (бренды): та же
+ * идея (RBAC AJAX-раскрытия завязан на тот же `where`, что и видимый
+ * список, а не на отдельную проверку), но параметризуемая -- 2.2 раскрывает
+ * и по brand (уровень 1->2), и по brand+clientId одновременно (уровень
+ * 2->3), а не только по clientId, как 2.1.
+ */
+async function isInReportScope(where, extra) {
+  const count = await prisma.saleSku.count({ where: { ...where, ...extra } });
+  return count > 0;
+}
+
 function withLiters(rows, key) {
   return rows.map((r) => ({ ...r, showLiters: OIL_BRANDS.includes(r[key]) }));
 }
@@ -194,14 +205,136 @@ async function getClientsExportRows(where) {
   });
 }
 
+// ТЗ 2.2: "Продажи по брендам" -- та же логика 2.1 (сортировка EUR убыв.,
+// пагинация, ленивое раскрытие), но верхний уровень -- бренд, и без уровня
+// "номенклатурная группа" (ТЗ 2.2 сама даёт только "бренд -> клиенты ->
+// артикулы", в отличие от 4 уровней 2.1). Дополнительная колонка -- "доля
+// бренда в обороте менеджера, %": знаменатель -- managerTotalEur, т.е.
+// сумма по ВСЕМУ текущему скоупу `where` (менеджер/регион/месяц), а не по
+// отдельному клиенту -- ТЗ прямо говорит "доля... в обороте МЕНЕДЖЕРА".
+async function getBrandsPage(where, page = 1) {
+  const skip = (page - 1) * PAGE_SIZE;
+  const [rows, distinctBrands, totalAgg] = await Promise.all([
+    prisma.saleSku.groupBy({
+      by: ['brand'],
+      where,
+      _sum: { revenueEur: true, volumeL: true },
+      orderBy: { _sum: { revenueEur: 'desc' } },
+      skip,
+      take: PAGE_SIZE,
+    }),
+    prisma.saleSku.findMany({ where, distinct: ['brand'], select: { brand: true } }),
+    prisma.saleSku.aggregate({ where, _sum: { revenueEur: true } }),
+  ]);
+
+  const managerTotalEur = totalAgg._sum.revenueEur || 0;
+  const items = withLiters(
+    rows.map((r) => {
+      const revenueEur = r._sum.revenueEur || 0;
+      return {
+        brand: r.brand,
+        revenueEur,
+        volumeL: r._sum.volumeL || 0,
+        percent: managerTotalEur ? (revenueEur / managerTotalEur) * 100 : null,
+      };
+    }),
+    'brand'
+  );
+
+  const total = distinctBrands.length;
+  return {
+    items,
+    page,
+    pageSize: PAGE_SIZE,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    managerTotalEur,
+  };
+}
+
+// Уровень 2 (ТЗ 2.2): клиенты внутри бренда, в рамках того же `where`, что
+// и видимый список брендов (месяц/менеджер/регион) -- не "клиенты вообще",
+// а именно те, что купили этот бренд в этом скоупе.
+async function getBrandClientBreakdown(where, brand) {
+  const rows = await prisma.saleSku.groupBy({
+    by: ['clientId'],
+    where: { ...where, brand },
+    _sum: { revenueEur: true, volumeL: true },
+    orderBy: { _sum: { revenueEur: 'desc' } },
+  });
+  const clients = await prisma.client.findMany({
+    where: { id: { in: rows.map((r) => r.clientId) } },
+    select: { id: true, name: true },
+  });
+  const nameById = new Map(clients.map((c) => [c.id, c.name]));
+  const showLiters = OIL_BRANDS.includes(brand);
+  return rows.map((r) => ({
+    clientId: r.clientId,
+    name: nameById.get(r.clientId) || `Клиент #${r.clientId}`,
+    revenueEur: r._sum.revenueEur || 0,
+    volumeL: showLiters ? r._sum.volumeL || 0 : null,
+  }));
+}
+
+// Уровень 3 (лист, ТЗ 2.2): артикулы внутри бренда+клиента, в рамках того
+// же `where`, что и видимый список (не через productGroup -- 2.2 не
+// раскрывает по группе, в отличие от 2.1).
+async function getBrandClientSkuBreakdown(where, brand, clientId) {
+  const rows = await prisma.saleSku.groupBy({
+    by: ['sku'],
+    where: { ...where, brand, clientId },
+    _sum: { revenueEur: true, volumeL: true },
+    orderBy: { _sum: { revenueEur: 'desc' } },
+  });
+  const showLiters = OIL_BRANDS.includes(brand);
+  return rows.map((r) => ({
+    sku: r.sku,
+    revenueEur: r._sum.revenueEur || 0,
+    volumeL: showLiters ? r._sum.volumeL || 0 : null,
+  }));
+}
+
+// Плоская выгрузка для 2.2 (тот же принцип, что getClientsExportRows) --
+// одна строка на (бренд, клиент, артикул).
+async function getBrandsExportRows(where) {
+  const rows = await prisma.saleSku.groupBy({
+    by: ['brand', 'clientId', 'sku'],
+    where,
+    _sum: { revenueEur: true, volumeL: true },
+    orderBy: [{ brand: 'asc' }],
+  });
+  const clients = await prisma.client.findMany({
+    where: { id: { in: [...new Set(rows.map((r) => r.clientId))] } },
+    select: { id: true, name: true, manager: { select: { name: true } } },
+  });
+  const clientById = new Map(clients.map((c) => [c.id, c]));
+
+  return rows.map((r) => {
+    const c = clientById.get(r.clientId);
+    return {
+      managerName: c && c.manager ? c.manager.name : '—',
+      brand: r.brand,
+      clientName: c ? c.name : `Клиент #${r.clientId}`,
+      sku: r.sku,
+      revenueEur: r._sum.revenueEur || 0,
+      volumeL: OIL_BRANDS.includes(r.brand) ? r._sum.volumeL || 0 : null,
+    };
+  });
+}
+
 module.exports = {
   buildReportWhere,
   getReportManagerOptions,
   getClientsPage,
   isClientInReportScope,
+  isInReportScope,
   getGroupBreakdown,
   getBrandBreakdown,
   getSkuBreakdown,
   getClientsExportRows,
+  getBrandsPage,
+  getBrandClientBreakdown,
+  getBrandClientSkuBreakdown,
+  getBrandsExportRows,
   PAGE_SIZE,
 };
