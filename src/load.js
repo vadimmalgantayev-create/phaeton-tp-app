@@ -238,6 +238,7 @@ async function loadAll(inputDir, outDir) {
             totalDebt: rec.totalDebt,
             limitAmount: rec.limitAmount,
             nearestPaymentDate: rec.nearestPaymentDate,
+            overdueTotal: rec.overdueTotal,
             bucketUnder3d: rec.bucketUnder3d,
             bucket3to7d: rec.bucket3to7d,
             bucket7to14d: rec.bucket7to14d,

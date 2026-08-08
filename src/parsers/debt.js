@@ -72,6 +72,11 @@ async function parseDebt(filePath, sheetName) {
         totalDebt,
         limitAmount: toNumberOrNull(row[LIMIT_COL]),
         nearestPaymentDate: null,
+        // QA PHA-88: сохраняем саму сумму "Итого", а не только производный
+        // isOverdue -- у части клиентов 1С заполняет эту колонку, но
+        // оставляет бакеты старения пустыми, и сумма бакетов тогда даёт 0
+        // там, где реальная просрочка есть (см. Debt.overdueTotal).
+        overdueTotal,
         isOverdue: overdueTotal > 0,
       };
       for (const bucket of BUCKET_COLUMNS) {

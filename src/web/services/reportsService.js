@@ -347,28 +347,17 @@ function buildDebtReportWhere(user, queryManagerId) {
   return clientWhere;
 }
 
-// Суммы бакетов старения (`src/parsers/debt.js: BUCKET_COLUMNS`) -- это
-// ровно то, что 1С считает просроченной задолженностью (колонка "Итого" в
-// исходном файле, `OVERDUE_TOTAL_COL`); значение этой колонки не хранится
-// отдельным полем в Prisma-модели `Debt` (в отличие от `isOverdue`,
-// производного от него флага), поэтому пересчитывается суммой бакетов --
-// те же данные, что уже легли в БД, без новой бизнес-логики.
-const DEBT_BUCKET_FIELDS = [
-  'bucketUnder3d',
-  'bucket3to7d',
-  'bucket7to14d',
-  'bucket14to30d',
-  'bucket30to60d',
-  'bucket60to90d',
-  'bucket90to180d',
-  'bucket180dTo1y',
-  'bucket1to2y',
-  'bucket2to3y',
-  'bucketOver3y',
-];
-
+// QA PHA-88 (2.3): "просрочка" -- значение колонки "Итого" исходного файла
+// (`Debt.overdueTotal`, читается в `parseDebt`), а не пересчёт суммой
+// бакетов старения. Раньше суммировали бакеты (`bucketUnder3d`…
+// `bucketOver3y`) -- для большинства строк это совпадает с "Итого", но у
+// части клиентов 1С заполняет "Итого", оставляя все 11 бакетов пустыми:
+// сумма бакетов тогда давала 0, даже когда `isOverdue` уже честно было true
+// (нашлось на реальных данных, 5/400 строк -- см. README "QA PHA-88" для
+// разбора конкретных сумм). `overdueTotal` хранится отдельным полем именно
+// чтобы не зависеть от того, расписала ли 1С бакеты для этого клиента.
 function overdueEurOf(debt) {
-  return DEBT_BUCKET_FIELDS.reduce((sum, field) => sum + (debt[field] || 0), 0);
+  return debt.overdueTotal || 0;
 }
 
 // ТЗ 2.3: клиенты текущего менеджера с задолженностью, сортировка по сумме
