@@ -3,6 +3,7 @@
 const { PrismaClient } = require('@prisma/client');
 const { getClientPlanFacts } = require('./clientPlanService');
 const { addMonths } = require('./salesMonths');
+const { OIL_BRANDS } = require('./taskBrandMapping');
 
 const prisma = new PrismaClient();
 const PAGE_SIZE = 30;
@@ -137,6 +138,12 @@ async function getClientDetail(clientId) {
 // Список брендов в строке -- объединение брендов текущего месяца и брендов
 // того же месяца год назад (а не "все бренды когда-либо купленные"), чтобы
 // таблица отражала именно два сравниваемых периода, как просит ТЗ.
+//
+// PHA-89: масляные бренды (OIL_BRANDS, тот же список что и в PHA-84/2.1
+// отчёте 2.2) дополнительно показывают объём в литрах за оба периода --
+// у остальных брендов currentVolumeL/lastYearVolumeL остаются null (пусто).
+// Сравнение/отклонение и фильтр Прирост/Отставание по-прежнему считаются
+// только по EUR -- литры здесь чисто справочные, без своего % отклонения.
 async function getBrandYoyComparison(clientId, month) {
   const lastYearMonth = addMonths(month, -12);
 
@@ -154,23 +161,36 @@ async function getBrandYoyComparison(clientId, month) {
       })
     : [];
 
-  const currentByBrand = new Map(currentRows.map((r) => [r.brand, r._sum.revenueEur || 0]));
-  const lastYearByBrand = new Map(lastYearRows.map((r) => [r.brand, r._sum.revenueEur || 0]));
+  const currentByBrand = new Map(currentRows.map((r) => [r.brand, { eur: r._sum.revenueEur || 0, volumeL: r._sum.volumeL || 0 }]));
+  const lastYearByBrand = new Map(lastYearRows.map((r) => [r.brand, { eur: r._sum.revenueEur || 0, volumeL: r._sum.volumeL || 0 }]));
   const brands = new Set([...currentByBrand.keys(), ...lastYearByBrand.keys()]);
 
   const rows = [...brands].map((brand) => {
-    const currentEur = currentByBrand.get(brand) || 0;
+    const isOilBrand = OIL_BRANDS.includes(brand);
+    const currentEur = currentByBrand.get(brand)?.eur || 0;
+    const currentVolumeL = isOilBrand ? currentByBrand.get(brand)?.volumeL || 0 : null;
     if (!hasBase) {
-      return { brand, currentEur, lastYearEur: null, deviationEur: null, deviationPercent: null, isNew: false, direction: null };
+      return {
+        brand,
+        currentEur,
+        currentVolumeL,
+        lastYearEur: null,
+        lastYearVolumeL: null,
+        deviationEur: null,
+        deviationPercent: null,
+        isNew: false,
+        direction: null,
+      };
     }
-    const lastYearEur = lastYearByBrand.get(brand) || 0;
+    const lastYearEur = lastYearByBrand.get(brand)?.eur || 0;
+    const lastYearVolumeL = isOilBrand ? lastYearByBrand.get(brand)?.volumeL || 0 : null;
     const deviationEur = currentEur - lastYearEur;
     // ТЗ 3.1: прошлый год = 0 -> "новый" вместо %. ТЗ 3.2: "новые" бренды
     // (не было в прошлом году) считаются приростом.
     const isNew = lastYearEur === 0 && currentEur > 0;
     const deviationPercent = lastYearEur !== 0 ? (deviationEur / lastYearEur) * 100 : null;
     const direction = deviationEur > 0 ? 'up' : deviationEur < 0 ? 'down' : null;
-    return { brand, currentEur, lastYearEur, deviationEur, deviationPercent, isNew, direction };
+    return { brand, currentEur, currentVolumeL, lastYearEur, lastYearVolumeL, deviationEur, deviationPercent, isNew, direction };
   });
 
   rows.sort((a, b) => b.currentEur - a.currentEur);

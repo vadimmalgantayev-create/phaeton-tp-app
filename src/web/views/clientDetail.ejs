@@ -93,8 +93,9 @@
               <%= r.brand %>
               <span class="task-target">
                 <%= Math.round(r.currentEur).toLocaleString('ru-RU') %> EUR
+                <% if (r.currentVolumeL !== null) { %> · <%= Math.round(r.currentVolumeL).toLocaleString('ru-RU') %> л<% } %>
                 <% if (hasBase) { %>
-                  · <%= monthLabel(lastYearMonth) %>: <%= Math.round(r.lastYearEur).toLocaleString('ru-RU') %> EUR
+                  · <%= monthLabel(lastYearMonth) %>: <%= Math.round(r.lastYearEur).toLocaleString('ru-RU') %> EUR<% if (r.lastYearVolumeL !== null) { %> · <%= Math.round(r.lastYearVolumeL).toLocaleString('ru-RU') %> л<% } %>
                 <% } %>
               </span>
             </div>
