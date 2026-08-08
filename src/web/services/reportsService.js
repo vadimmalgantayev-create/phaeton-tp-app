@@ -322,6 +322,119 @@ async function getBrandsExportRows(where) {
   });
 }
 
+// ТЗ 2.3: "Дебиторская задолженность" -- скоуп строится по Client, а не по
+// SaleSku, как у 2.1/2.2: у Debt нет колонки `month` (см. `src/parsers/debt.js`
+// и README "Известные ограничения") -- это текущий снимок 1С на момент
+// последней загрузки, а не помесячная история, поэтому здесь нет и не может
+// быть селектора месяца, в отличие от общего требования ТЗ Блок 2. То же
+// самое (снимок, не помесячно) уже опирается вся остальная работа с долгами
+// в проекте -- карточка клиента и дашборд руководителя/ТП (см.
+// `dashboardService.js`, `managerDashboardService.js`, `clientDetail.ejs`) --
+// поэтому это не новое допущение, а согласованность с уже принятым в
+// продукте использованием этих данных.
+function buildDebtReportWhere(user, queryManagerId) {
+  const clientWhere = {};
+  const ownManagerIds = visibleManagerIds(user);
+  if (ownManagerIds) {
+    clientWhere.managerId = { in: ownManagerIds };
+  } else if (queryManagerId) {
+    clientWhere.managerId = queryManagerId;
+  }
+  const regionId = visibleRegionId(user);
+  if (!ownManagerIds) {
+    clientWhere.manager = { isServiceAccount: false, ...(regionId ? { regionId } : {}) };
+  }
+  return clientWhere;
+}
+
+// Суммы бакетов старения (`src/parsers/debt.js: BUCKET_COLUMNS`) -- это
+// ровно то, что 1С считает просроченной задолженностью (колонка "Итого" в
+// исходном файле, `OVERDUE_TOTAL_COL`); значение этой колонки не хранится
+// отдельным полем в Prisma-модели `Debt` (в отличие от `isOverdue`,
+// производного от него флага), поэтому пересчитывается суммой бакетов --
+// те же данные, что уже легли в БД, без новой бизнес-логики.
+const DEBT_BUCKET_FIELDS = [
+  'bucketUnder3d',
+  'bucket3to7d',
+  'bucket7to14d',
+  'bucket14to30d',
+  'bucket30to60d',
+  'bucket60to90d',
+  'bucket90to180d',
+  'bucket180dTo1y',
+  'bucket1to2y',
+  'bucket2to3y',
+  'bucketOver3y',
+];
+
+function overdueEurOf(debt) {
+  return DEBT_BUCKET_FIELDS.reduce((sum, field) => sum + (debt[field] || 0), 0);
+}
+
+// ТЗ 2.3: клиенты текущего менеджера с задолженностью, сортировка по сумме
+// убыв., итог. Раскрытие до документов не реализуется -- модель `Debt`
+// хранит только клиентский уровень (`src/parsers/debt.js`: строки уровня
+// "договор"/"заказ" читаются исключительно ради ближайшей даты платежа, их
+// суммы никуда не сохраняются), документного уровня в данных нет -- ровно
+// тот случай, который ТЗ само оговаривает ("если нет -- только клиентский
+// список"). Клиенты без записи `Debt` (нет долга вообще) в список не
+// попадают -- показывать сотни строк с нулём было бы шумом в отчёте про
+// задолженность.
+async function getDebtPage(clientWhere, page = 1) {
+  const skip = (page - 1) * PAGE_SIZE;
+  const debtWhere = { client: clientWhere };
+  const [rows, total, totalAgg] = await Promise.all([
+    prisma.debt.findMany({
+      where: debtWhere,
+      include: { client: { select: { id: true, name: true, code: true, manager: { select: { name: true } } } } },
+      orderBy: { totalDebt: 'desc' },
+      skip,
+      take: PAGE_SIZE,
+    }),
+    prisma.debt.count({ where: debtWhere }),
+    prisma.debt.aggregate({ where: debtWhere, _sum: { totalDebt: true } }),
+  ]);
+
+  const items = rows.map((d) => ({
+    clientId: d.client.id,
+    name: d.client.name,
+    code: d.client.code,
+    managerName: d.client.manager ? d.client.manager.name : null,
+    totalDebt: d.totalDebt,
+    overdueEur: overdueEurOf(d),
+    isOverdue: d.isOverdue,
+    nearestPaymentDate: d.nearestPaymentDate,
+  }));
+
+  return {
+    items,
+    page,
+    pageSize: PAGE_SIZE,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    managerTotalDebtEur: totalAgg._sum.totalDebt || 0,
+  };
+}
+
+// Плоская выгрузка для 2.3 (тот же принцип, что getClientsExportRows/
+// getBrandsExportRows) -- полный список по текущему скоупу, не только
+// текущая страница.
+async function getDebtExportRows(clientWhere) {
+  const rows = await prisma.debt.findMany({
+    where: { client: clientWhere },
+    include: { client: { select: { name: true, manager: { select: { name: true } } } } },
+    orderBy: { totalDebt: 'desc' },
+  });
+  return rows.map((d) => ({
+    managerName: d.client.manager ? d.client.manager.name : '—',
+    clientName: d.client.name,
+    totalDebt: d.totalDebt,
+    overdueEur: overdueEurOf(d),
+    isOverdue: d.isOverdue,
+    nearestPaymentDate: d.nearestPaymentDate,
+  }));
+}
+
 module.exports = {
   buildReportWhere,
   getReportManagerOptions,
@@ -336,5 +449,8 @@ module.exports = {
   getBrandClientBreakdown,
   getBrandClientSkuBreakdown,
   getBrandsExportRows,
+  buildDebtReportWhere,
+  getDebtPage,
+  getDebtExportRows,
   PAGE_SIZE,
 };

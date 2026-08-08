@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Отчёты — Дебиторская задолженность — Phaeton ТП</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+</head>
+<body>
+  <div class="screen">
+    <%- include('partials/nav', { user }) %>
+    <div class="header">
+      <h1>Дебиторская задолженность</h1>
+    </div>
+    <%- include('partials/reportsSubnav', { active: 'debt' }) %>
+
+    <% const mgrParam = queryManagerId ? `managerId=${queryManagerId}&` : ''; %>
+
+    <div class="card">
+      <% if (managerOptions.length > 0) { %>
+        <form method="get" action="/reports/debt" class="form">
+          <select class="form-input" name="managerId" onchange="this.form.submit()">
+            <option value="">Все ТП</option>
+            <% managerOptions.forEach(function(m) { %>
+              <option value="<%= m.id %>" <%= queryManagerId === m.id ? 'selected' : '' %>><%= m.name %></option>
+            <% }) %>
+          </select>
+        </form>
+      <% } %>
+      <a class="weight-badge" style="display:inline-block;margin-top:10px;text-decoration:none"
+         href="/reports/debt/export.xlsx?<%= mgrParam %>">Выгрузить в Excel</a>
+    </div>
+
+    <div class="card">
+      <p class="empty-state">Клиентов с задолженностью: <%= total %> (<%= page %>/<%= totalPages %>)</p>
+      <% if (items.length === 0) { %>
+        <p class="empty-state" style="margin-top:10px">Задолженности не найдено</p>
+      <% } else { %>
+        <% items.forEach(function(c) { %>
+          <div class="task-row">
+            <div class="task-name">
+              <a href="/clients/<%= c.clientId %>" style="color:inherit;text-decoration:none"><%= c.name %></a>
+              <% if (c.managerName) { %><span class="task-target"><%= c.managerName %></span><% } %>
+              <% if (c.nearestPaymentDate) { %><span class="task-target">ближайший платёж: <%= new Intl.DateTimeFormat('ru-RU').format(c.nearestPaymentDate) %></span><% } %>
+            </div>
+            <div class="weight-badge">
+              <%= Math.round(c.totalDebt).toLocaleString('ru-RU') %>
+              <% if (c.isOverdue) { %> · <span class="attention-debt">просрочено <%= Math.round(c.overdueEur).toLocaleString('ru-RU') %></span><% } %>
+            </div>
+          </div>
+        <% }) %>
+        <div class="task-row">
+          <div class="task-name"><strong>Итого по менеджеру<% if (!queryManagerId && managerOptions.length > 0) { %> (все ТП)<% } %></strong></div>
+          <div class="weight-badge"><%= Math.round(managerTotalDebtEur).toLocaleString('ru-RU') %></div>
+        </div>
+      <% } %>
+    </div>
+
+    <div class="card">
+      <div class="nav">
+        <% if (page > 1) { %><a href="?<%= mgrParam %>page=<%= page - 1 %>">← назад</a><% } %>
+        <% if (page < totalPages) { %><a href="?<%= mgrParam %>page=<%= page + 1 %>">вперёд →</a><% } %>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -15,17 +15,21 @@ const {
   getBrandClientBreakdown,
   getBrandClientSkuBreakdown,
   getBrandsExportRows,
+  buildDebtReportWhere,
+  getDebtPage,
+  getDebtExportRows,
 } = require('../services/reportsService');
 const { getAvailableMonths, parseMonthKey, monthKey, startOfMonth } = require('../services/salesMonths');
 const { buildClientsReportWorkbookBuffer } = require('../../exportClientsReport');
 const { buildBrandsReportWorkbookBuffer } = require('../../exportBrandsReport');
+const { buildDebtReportWorkbookBuffer } = require('../../exportDebtReport');
 
 const router = express.Router();
 
-// ТЗ PHA-88 Блок 2: пока реализован только отчёт "Продажи по клиентам"
-// (2.1) -- по ТЗ отчёты пушатся по одному (клиенты -> бренды -> дебиторка),
-// поэтому /reports сразу ведёт на единственный готовый отчёт, а не на
-// страницу-заглушку со ссылками на ещё не существующие 2.2/2.3.
+// ТЗ PHA-88 Блок 2: все три отчёта (2.1/2.2/2.3) реализованы; /reports
+// по-прежнему ведёт на 2.1 как отчёт по умолчанию, а не на страницу-хаб --
+// ТЗ хаб не запрашивала, три отчёта уже равноправно доступны через
+// `partials/reportsSubnav.ejs` наверху каждого экрана.
 router.get('/reports', (req, res) => {
   res.redirect('/reports/clients');
 });
@@ -220,6 +224,50 @@ router.get('/reports/brands/expand', async (req, res, next) => {
     res.render('partials/reportLevelRows', {
       rows: rows.map((r) => ({ key: r.sku, label: r.sku, revenueEur: r.revenueEur, volumeL: r.volumeL, nextUrl: null })),
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ТЗ 2.3: "Дебиторская задолженность" -- в отличие от 2.1/2.2 источник это
+// Debt (снимок 1С, без помесячной истории, см. reportsService.js), поэтому
+// свой parseFilters без month/monthKey и без AJAX-раскрытия -- модель Debt
+// не хранит документный уровень (см. комментарий над getDebtPage).
+function parseDebtFilters(query, user) {
+  const queryManagerId = query.managerId ? Number(query.managerId) : null;
+  const clientWhere = buildDebtReportWhere(user, queryManagerId);
+  return { queryManagerId, clientWhere };
+}
+
+router.get('/reports/debt', async (req, res, next) => {
+  try {
+    const { queryManagerId, clientWhere } = parseDebtFilters(req.query, req.user);
+    const page = Math.max(1, Number(req.query.page) || 1);
+
+    const [managerOptions, data] = await Promise.all([
+      getReportManagerOptions(req.user),
+      getDebtPage(clientWhere, page),
+    ]);
+
+    res.render('reportDebt', {
+      user: req.user,
+      managerOptions,
+      queryManagerId,
+      ...data,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/reports/debt/export.xlsx', async (req, res, next) => {
+  try {
+    const { clientWhere } = parseDebtFilters(req.query, req.user);
+    const rows = await getDebtExportRows(clientWhere);
+    const buffer = buildDebtReportWorkbookBuffer(rows);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="debt.xlsx"');
+    res.send(buffer);
   } catch (err) {
     next(err);
   }
