@@ -343,9 +343,11 @@ html, body {
   margin-left: 4px;
 }
 
-.report-hidden {
-  display: none;
-}
+/* PHA-91: скрытие/показ .report-children больше не идёт через CSS-класс --
+   см. комментарий в partials/reportExpandScript.ejs про то, почему (Service
+   Worker кэширует styles.css cache-first, устаревший кэш на устройстве мог
+   не содержать новых правил). Состояние теперь ставится инлайновым
+   style.display прямо из JS/EJS. */
 
 .report-toggle {
   background: none;

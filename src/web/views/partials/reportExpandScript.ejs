@@ -3,7 +3,17 @@
     бренд->клиент->артикул) -- сама логика раскрытия/сворачивания одинакова,
     различается только `data-url` на кнопках, которые уже собирает каждый
     роут отдельно. Вынесено в партиал, а не задублировано в каждом
-    report*.ejs, чтобы поведение раскрытия не могло разойтись между отчётами. %>
+    report*.ejs, чтобы поведение раскрытия не могло разойтись между отчётами.
+
+    PHA-91 QA (iPhone): скрытие/показ раньше шло через CSS-класс
+    .report-hidden (styles.css). Service Worker кэширует styles.css
+    cache-first без версии кэша (см. sw.js) -- на устройстве, где старый
+    styles.css уже был закэширован ДО того, как в CSS появилось правило
+    .report-hidden, сворачивание визуально не срабатывало (класс в DOM
+    переключался, но браузер не знал такого правила). Убрано из-под
+    зависимости от кэша стилей: состояние скрытости теперь ставится инлайновым
+    style.display -- работает независимо от того, какая версия styles.css
+    загружена. %>
 <script>
   document.addEventListener('click', function (e) {
     var toggle = e.target.closest('.report-toggle');
@@ -11,8 +21,9 @@
     var row = toggle.closest('.report-row');
     var container = row.querySelector(':scope > .report-children');
     if (container.dataset.loaded === '1') {
-      var hidden = container.classList.toggle('report-hidden');
-      toggle.textContent = hidden ? '▶' : '▼';
+      var willHide = container.style.display !== 'none';
+      container.style.display = willHide ? 'none' : '';
+      toggle.textContent = willHide ? '▶' : '▼';
       return;
     }
     toggle.disabled = true;
@@ -21,7 +32,7 @@
       .then(function (html) {
         container.innerHTML = html;
         container.dataset.loaded = '1';
-        container.classList.remove('report-hidden');
+        container.style.display = '';
         toggle.textContent = '▼';
         toggle.disabled = false;
       })

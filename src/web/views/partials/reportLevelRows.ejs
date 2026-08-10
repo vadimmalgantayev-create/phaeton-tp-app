@@ -18,7 +18,7 @@
         <% if (r.volumeL !== null) { %> · <%= Math.round(r.volumeL).toLocaleString('ru-RU') %> л<% } %>
       </div>
     </div>
-    <% if (r.nextUrl) { %><div class="report-children report-hidden"></div><% } %>
+    <% if (r.nextUrl) { %><div class="report-children" style="display:none"></div><% } %>
   </div>
 <% }) %>
 <% if (rows.length === 0) { %>
