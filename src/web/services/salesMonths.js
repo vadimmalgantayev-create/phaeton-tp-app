@@ -60,4 +60,22 @@ async function getAvailableMonths() {
   return months;
 }
 
-module.exports = { getAvailableMonths, startOfMonth, addMonths, parseMonthKey, monthKey };
+/** Месяц по умолчанию для селекторов месяца (карточка клиента, вкладка
+ * "Отчёты") -- ПОСЛЕДНИЙ месяц, за который реально есть данные SaleSku, а
+ * не текущий календарный (PHA-90): на момент задачи выгрузка отстаёт от
+ * календаря на месяц (сейчас август 2026, данные -- по июль), и открытие
+ * экрана без ?month= в текущем календарном месяце показывало всем брендам
+ * "-100%" вместо содержательного среза. Текущий календарный месяц по-прежнему
+ * остаётся в списке `getAvailableMonths()` -- его можно выбрать вручную,
+ * меняется только автоподстановка при заходе без параметра.
+ *
+ * Отдельный запрос агрегата, а не переиспользование `getAvailableMonths()`
+ * (там он тоже есть, но список дороже одного `_max`) -- вызывающая сторона
+ * в любом случае уже параллелит оба вызова через `Promise.all`.
+ */
+async function getDefaultMonth() {
+  const agg = await prisma.saleSku.aggregate({ _max: { month: true } });
+  return agg._max.month || startOfMonth(new Date());
+}
+
+module.exports = { getAvailableMonths, getDefaultMonth, startOfMonth, addMonths, parseMonthKey, monthKey };

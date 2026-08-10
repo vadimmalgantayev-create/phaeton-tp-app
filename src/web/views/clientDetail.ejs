@@ -88,25 +88,29 @@
         <p class="empty-state" style="margin-top:10px">Продаж за <%= monthLabel(month) %> не найдено</p>
       <% } else { %>
         <% brandRows.forEach(function(r) { %>
-          <div class="task-row">
-            <div class="task-name">
-              <%= r.brand %>
-              <span class="task-target">
-                <%= Math.round(r.currentEur).toLocaleString('ru-RU') %> EUR
-                <% if (r.currentVolumeL !== null) { %> · <%= Math.round(r.currentVolumeL).toLocaleString('ru-RU') %> л<% } %>
-                <% if (hasBase) { %>
-                  · <%= monthLabel(lastYearMonth) %>: <%= Math.round(r.lastYearEur).toLocaleString('ru-RU') %> EUR<% if (r.lastYearVolumeL !== null) { %> · <%= Math.round(r.lastYearVolumeL).toLocaleString('ru-RU') %> л<% } %>
-                <% } %>
-              </span>
-            </div>
-            <% if (hasBase) { %>
-              <div class="<%= r.direction === 'up' ? 'deviation-up' : r.direction === 'down' ? 'deviation-down' : '' %>">
-                <%= r.deviationEur >= 0 ? '+' : '' %><%= Math.round(r.deviationEur).toLocaleString('ru-RU') %> EUR
+          <div class="report-row">
+            <div class="task-row">
+              <div class="task-name">
+                <button type="button" class="report-toggle" data-url="/clients/<%= client.id %>/brands/expand?brand=<%= encodeURIComponent(r.brand) %>&<%= monthParam %>">▶</button>
+                <%= r.brand %>
                 <span class="task-target">
-                  <% if (r.isNew) { %>новый<% } else if (r.deviationPercent === null) { %>—<% } else { %><%= r.deviationPercent >= 0 ? '+' : '' %><%= Math.round(r.deviationPercent) %>%<% } %>
+                  <%= Math.round(r.currentEur).toLocaleString('ru-RU') %> EUR
+                  <% if (r.currentVolumeL !== null) { %> · <%= Math.round(r.currentVolumeL).toLocaleString('ru-RU') %> л<% } %>
+                  <% if (hasBase) { %>
+                    · <%= monthLabel(lastYearMonth) %>: <%= Math.round(r.lastYearEur).toLocaleString('ru-RU') %> EUR<% if (r.lastYearVolumeL !== null) { %> · <%= Math.round(r.lastYearVolumeL).toLocaleString('ru-RU') %> л<% } %>
+                  <% } %>
                 </span>
               </div>
-            <% } %>
+              <% if (hasBase) { %>
+                <div class="<%= r.direction === 'up' ? 'deviation-up' : r.direction === 'down' ? 'deviation-down' : '' %>">
+                  <%= r.deviationEur >= 0 ? '+' : '' %><%= Math.round(r.deviationEur).toLocaleString('ru-RU') %> EUR
+                  <span class="task-target">
+                    <% if (r.isNew) { %>новый<% } else if (r.deviationPercent === null) { %>—<% } else { %><%= r.deviationPercent >= 0 ? '+' : '' %><%= Math.round(r.deviationPercent) %>%<% } %>
+                  </span>
+                </div>
+              <% } %>
+            </div>
+            <div class="report-children report-hidden"></div>
           </div>
         <% }) %>
       <% } %>
@@ -139,5 +143,7 @@
       <% } %>
     </div>
   </div>
+
+  <%- include('partials/reportExpandScript') %>
 </body>
 </html>

@@ -11,9 +11,10 @@ const {
   setNoteDone,
   NOTE_TAGS,
   getBrandYoyComparison,
+  getBrandSkuYoyComparison,
   getDroppedSkus,
 } = require('../services/clientService');
-const { getAvailableMonths, parseMonthKey, startOfMonth } = require('../services/salesMonths');
+const { getAvailableMonths, getDefaultMonth, parseMonthKey } = require('../services/salesMonths');
 const { visibleManagerIds } = require('../auth/scope');
 const { requireRole } = require('../auth/middleware');
 
@@ -59,7 +60,9 @@ router.get('/clients/:id', async (req, res, next) => {
       return res.status(403).send('Недостаточно прав для просмотра этого клиента');
     }
 
-    const month = parseMonthKey(req.query.month) || startOfMonth(new Date());
+    // PHA-90: без ?month= -- последний месяц с данными SaleSku, не текущий
+    // календарный (см. salesMonths.js: getDefaultMonth).
+    const month = parseMonthKey(req.query.month) || (await getDefaultMonth());
     const dynamics = DYNAMICS_VALUES.includes(req.query.dynamics) ? req.query.dynamics : null;
     const droppedAll = req.query.droppedAll === '1';
 
@@ -103,6 +106,31 @@ async function checkClientAccess(req, clientId) {
   const forbidden = !!(managerIds && !managerIds.includes(client.managerId));
   return { client, forbidden };
 }
+
+// ТЗ PHA-90 п.1: ленивое AJAX-раскрытие бренда до артикулов внутри блока
+// "Продажи по брендам" карточки клиента -- та же схема, что и у отчёта 2.1
+// (partials/reportExpandScript.ejs + report-row/report-children), просто
+// ещё один уровень поверх уже существующего getBrandYoyComparison. RBAC --
+// тот же checkClientAccess, что и у заметок (доступ к карточке == доступ к
+// её раскрытиям).
+router.get('/clients/:id/brands/expand', async (req, res, next) => {
+  try {
+    const clientId = Number(req.params.id);
+    const brand = req.query.brand;
+    if (!Number.isInteger(clientId) || !brand) {
+      return res.status(400).send('Некорректные параметры раскрытия');
+    }
+    const { client, forbidden } = await checkClientAccess(req, clientId);
+    if (!client) return res.status(404).send('Клиент не найден');
+    if (forbidden) return res.status(403).send('Недостаточно прав для просмотра этого клиента');
+
+    const month = parseMonthKey(req.query.month) || (await getDefaultMonth());
+    const { rows, hasBase, lastYearMonth } = await getBrandSkuYoyComparison(clientId, brand, month);
+    res.render('partials/clientBrandSkuRows', { rows, hasBase, lastYearMonth });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.get('/clients/:id/notes', async (req, res, next) => {
   try {

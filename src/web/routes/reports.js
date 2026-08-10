@@ -19,7 +19,7 @@ const {
   getDebtPage,
   getDebtExportRows,
 } = require('../services/reportsService');
-const { getAvailableMonths, parseMonthKey, monthKey, startOfMonth } = require('../services/salesMonths');
+const { getAvailableMonths, getDefaultMonth, parseMonthKey, monthKey } = require('../services/salesMonths');
 const { buildClientsReportWorkbookBuffer } = require('../../exportClientsReport');
 const { buildBrandsReportWorkbookBuffer } = require('../../exportBrandsReport');
 const { buildDebtReportWorkbookBuffer } = require('../../exportDebtReport');
@@ -37,8 +37,10 @@ router.get('/reports', (req, res) => {
 // Общий разбор фильтров экрана и Excel-выгрузки (тот же принцип, что
 // parseVisitsFilters в manager.js: одна функция для обоих роутов, чтобы
 // страница и выгрузка не могли разойтись по строкам).
-function parseReportFilters(query, user) {
-  const month = parseMonthKey(query.month) || startOfMonth(new Date());
+// PHA-90: без ?month= -- последний месяц с данными SaleSku (getDefaultMonth),
+// не текущий календарный, поэтому функция стала асинхронной.
+async function parseReportFilters(query, user) {
+  const month = parseMonthKey(query.month) || (await getDefaultMonth());
   const queryManagerId = query.managerId ? Number(query.managerId) : null;
   const where = buildReportWhere(user, month, queryManagerId);
   return { month, queryManagerId, where };
@@ -46,7 +48,7 @@ function parseReportFilters(query, user) {
 
 router.get('/reports/clients', async (req, res, next) => {
   try {
-    const { month, queryManagerId, where } = parseReportFilters(req.query, req.user);
+    const { month, queryManagerId, where } = await parseReportFilters(req.query, req.user);
     const page = Math.max(1, Number(req.query.page) || 1);
 
     const [availableMonths, managerOptions, data] = await Promise.all([
@@ -71,7 +73,7 @@ router.get('/reports/clients', async (req, res, next) => {
 
 router.get('/reports/clients/export.xlsx', async (req, res, next) => {
   try {
-    const { month, where } = parseReportFilters(req.query, req.user);
+    const { month, where } = await parseReportFilters(req.query, req.user);
     const rows = await getClientsExportRows(where);
     const buffer = buildClientsReportWorkbookBuffer(rows);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -89,7 +91,7 @@ router.get('/reports/clients/export.xlsx', async (req, res, next) => {
 // последовательнее прямо на сервере тем же EJS, что и всю остальную вёрстку.
 router.get('/reports/clients/expand', async (req, res, next) => {
   try {
-    const { month, where } = parseReportFilters(req.query, req.user);
+    const { month, where } = await parseReportFilters(req.query, req.user);
     const clientId = Number(req.query.clientId);
     const level = req.query.level; // 'group' | 'brand' | 'sku'
 
@@ -145,7 +147,7 @@ router.get('/reports/clients/expand', async (req, res, next) => {
 // отличается от 2.1).
 router.get('/reports/brands', async (req, res, next) => {
   try {
-    const { month, queryManagerId, where } = parseReportFilters(req.query, req.user);
+    const { month, queryManagerId, where } = await parseReportFilters(req.query, req.user);
     const page = Math.max(1, Number(req.query.page) || 1);
 
     const [availableMonths, managerOptions, data] = await Promise.all([
@@ -170,7 +172,7 @@ router.get('/reports/brands', async (req, res, next) => {
 
 router.get('/reports/brands/export.xlsx', async (req, res, next) => {
   try {
-    const { month, where } = parseReportFilters(req.query, req.user);
+    const { month, where } = await parseReportFilters(req.query, req.user);
     const rows = await getBrandsExportRows(where);
     const buffer = buildBrandsReportWorkbookBuffer(rows);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -189,7 +191,7 @@ router.get('/reports/brands/export.xlsx', async (req, res, next) => {
 // точнее отражает то, что реально запрашивается).
 router.get('/reports/brands/expand', async (req, res, next) => {
   try {
-    const { month, where } = parseReportFilters(req.query, req.user);
+    const { month, where } = await parseReportFilters(req.query, req.user);
     const brand = req.query.brand;
     const level = req.query.level; // 'client' | 'sku'
 

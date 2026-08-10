@@ -267,6 +267,77 @@ async function getDroppedSkus(clientId, month) {
   return { rows: dropped };
 }
 
+// ТЗ PHA-90 п.1: раскрытие одного бренда из "Продажи по брендам" до
+// артикулов -- тот же расчёт год-к-году, что и getBrandYoyComparison выше,
+// но сгруппированный по sku внутри одного clientId+brand+month, а не по
+// brand внутри clientId+month. Раскрытие ленивое (AJAX, см.
+// /clients/:id/brands/expand в routes/clients.js), по образцу отчёта 2.1 --
+// не рендерится для всех брендов сразу.
+//
+// Сортировка -- по отклонению EUR по возрастанию (ТЗ "от худшего к
+// лучшему": самое отрицательное отклонение сверху). Если базы для сравнения
+// нет (!hasBase, симметрично верхнему уровню), отклонение не считается --
+// тогда сортировка по факту EUR текущего месяца по убыванию, как на прочих
+// листовых уровнях отчётов (getSkuBreakdown/getBrandClientSkuBreakdown).
+// Фильтр Прирост/Отставание карточки (dynamics) относится только к строкам
+// брендов -- внутри раскрытия, как прямо просит ТЗ, он не применяется,
+// поэтому сюда не передаётся.
+//
+// Литры -- та же логика PHA-89 (OIL_BRANDS), что и на уровне брендов.
+async function getBrandSkuYoyComparison(clientId, brand, month) {
+  const lastYearMonth = addMonths(month, -12);
+  const isOilBrand = OIL_BRANDS.includes(brand);
+
+  const [minMonthAgg, currentRows] = await Promise.all([
+    prisma.saleSku.aggregate({ _min: { month: true } }),
+    prisma.saleSku.groupBy({ by: ['sku'], where: { clientId, brand, month }, _sum: { revenueEur: true, volumeL: true } }),
+  ]);
+  const hasBase = !!minMonthAgg._min.month && lastYearMonth >= minMonthAgg._min.month;
+
+  const lastYearRows = hasBase
+    ? await prisma.saleSku.groupBy({
+        by: ['sku'],
+        where: { clientId, brand, month: lastYearMonth },
+        _sum: { revenueEur: true, volumeL: true },
+      })
+    : [];
+
+  const currentBySku = new Map(currentRows.map((r) => [r.sku, { eur: r._sum.revenueEur || 0, volumeL: r._sum.volumeL || 0 }]));
+  const lastYearBySku = new Map(lastYearRows.map((r) => [r.sku, { eur: r._sum.revenueEur || 0, volumeL: r._sum.volumeL || 0 }]));
+  const skus = new Set([...currentBySku.keys(), ...lastYearBySku.keys()]);
+
+  const rows = [...skus].map((sku) => {
+    const currentEur = currentBySku.get(sku)?.eur || 0;
+    const currentVolumeL = isOilBrand ? currentBySku.get(sku)?.volumeL || 0 : null;
+    if (!hasBase) {
+      return {
+        sku,
+        currentEur,
+        currentVolumeL,
+        lastYearEur: null,
+        lastYearVolumeL: null,
+        deviationEur: null,
+        deviationPercent: null,
+        isNew: false,
+      };
+    }
+    const lastYearEur = lastYearBySku.get(sku)?.eur || 0;
+    const lastYearVolumeL = isOilBrand ? lastYearBySku.get(sku)?.volumeL || 0 : null;
+    const deviationEur = currentEur - lastYearEur;
+    const isNew = lastYearEur === 0 && currentEur > 0;
+    const deviationPercent = lastYearEur !== 0 ? (deviationEur / lastYearEur) * 100 : null;
+    return { sku, currentEur, currentVolumeL, lastYearEur, lastYearVolumeL, deviationEur, deviationPercent, isNew };
+  });
+
+  if (hasBase) {
+    rows.sort((a, b) => a.deviationEur - b.deviationEur);
+  } else {
+    rows.sort((a, b) => b.currentEur - a.currentEur);
+  }
+
+  return { rows, hasBase, lastYearMonth };
+}
+
 // Лёгкая выборка клиента без тяжёлых include -- для заголовка экрана заметок
 // и для проверки прав доступа (managerId), без загрузки скидок/ДЗ/истории.
 async function getClientBasic(clientId) {
@@ -334,5 +405,6 @@ module.exports = {
   setNoteDone,
   NOTE_TAGS,
   getBrandYoyComparison,
+  getBrandSkuYoyComparison,
   getDroppedSkus,
 };

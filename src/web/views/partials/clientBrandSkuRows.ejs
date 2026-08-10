@@ -1,0 +1,34 @@
+<%# Фрагмент HTML для /clients/:id/brands/expand -- артикулы внутри одного
+    бренда блока "Продажи по брендам" карточки клиента (ТЗ PHA-90 п.1).
+    Тот же визуальный паттерн строки, что и у самих строк брендов в
+    clientDetail.ejs (task-row + task-target + deviation-up/down) -- это тот
+    же раздел, просто на уровень глубже, а не отдельный экран со своей
+    вёрсткой. Артикулы -- лист (дальше раскрывать нечего), поэтому без
+    report-toggle/report-children. %>
+<% const monthLabel = function(d) { return new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(d); }; %>
+<% if (rows.length === 0) { %>
+  <p class="empty-state">Нет данных</p>
+<% } else { %>
+  <% rows.forEach(function(r) { %>
+    <div class="task-row">
+      <div class="task-name">
+        <%= r.sku %>
+        <span class="task-target">
+          <%= Math.round(r.currentEur).toLocaleString('ru-RU') %> EUR
+          <% if (r.currentVolumeL !== null) { %> · <%= Math.round(r.currentVolumeL).toLocaleString('ru-RU') %> л<% } %>
+          <% if (hasBase) { %>
+            · <%= monthLabel(lastYearMonth) %>: <%= Math.round(r.lastYearEur).toLocaleString('ru-RU') %> EUR<% if (r.lastYearVolumeL !== null) { %> · <%= Math.round(r.lastYearVolumeL).toLocaleString('ru-RU') %> л<% } %>
+          <% } %>
+        </span>
+      </div>
+      <% if (hasBase) { %>
+        <div class="<%= r.deviationEur > 0 ? 'deviation-up' : r.deviationEur < 0 ? 'deviation-down' : '' %>">
+          <%= r.deviationEur >= 0 ? '+' : '' %><%= Math.round(r.deviationEur).toLocaleString('ru-RU') %> EUR
+          <span class="task-target">
+            <% if (r.isNew) { %>новый<% } else if (r.deviationPercent === null) { %>—<% } else { %><%= r.deviationPercent >= 0 ? '+' : '' %><%= Math.round(r.deviationPercent) %>%<% } %>
+          </span>
+        </div>
+      <% } %>
+    </div>
+  <% }) %>
+<% } %>
